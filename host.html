@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم الهوست - إدارة الروليت</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="host-body">
+    <div class="host-container">
+        <h1>🎮 لوحة تحكم مدير البث</h1>
+
+        <div class="host-grid">
+            
+            <div class="control-side">
+                
+                <div id="setup-card" class="control-card">
+                    <h3>👥 إضافة لاعبين جدد</h3>
+                    <div class="input-group">
+                        <textarea id="names-input" placeholder="أدخل الأسماء هنا... (اسم في كل سطر)"></textarea>
+                        <button id="add-names-btn">➕ إضافة الأسماء للعجلة</button>
+                    </div>
+                    <button id="start-round-btn" class="btn-start-round">🚀 بدء الجولة واللعب</button>
+                </div>
+
+                <div id="game-controls-card" class="game-controls-container" style="display: none;">
+                    <button id="host-spin-btn" class="btn-spin-circular">🎡<br>تدوير</button>
+                    
+                    <button id="shuffle-btn" class="btn-shuffle-under">🔀 إعادة ترتيب عشوائي</button>
+                </div>
+
+                <div class="control-card players-list-card">
+                    <h3>👥 اللاعبين المتواجدين حالياً (<span id="player-count">0</span>)</h3>
+                    <ul id="host-players-list" class="host-list">
+                        </ul>
+                </div>
+
+                <div class="bottom-actions">
+                    <button id="reset-btn" class="btn-reset-bottom">🔄 إعادة ضبط اللعبة بالكامل</button>
+                </div>
+
+            </div>
+
+            <div class="wheel-side-container">
+                <div class="static-logo-container">
+                    <img src="logo.png" alt="شعار البث الثابت" class="fixed-stream-logo">
+                </div>
+                
+                <div class="wheel-box">
+                    <canvas id="wheel" width="500" height="500"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

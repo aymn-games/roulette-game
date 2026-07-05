@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عجلة الحظ المتكاملة - نظام القبائل</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="all-in-one-container">
+        <div class="host-side">
+            <div class="control-card">
+                <h3>إضافة لاعبين جدد 🎮</h3>
+                <div class="input-group">
+                    <textarea id="names-input" placeholder="أدخل الأسماء هنا... (اسم في كل سطر)"></textarea>
+                    <button id="add-names-btn">إضافة الأسماء للعجلة ➕</button>
+                </div>
+                <div class="actions-group">
+                    <button id="host-spin-btn" class="btn-spin">تدوير العجلة! 🎡</button>
+                    <button id="shuffle-btn" class="btn-reset" style="background: #ffaa00;">ترتيب عشوائي 🔀</button>
+                    <button id="reset-btn" class="btn-reset">إعادة ضبط 🔄</button>
+                </div>
+            </div>
+
+            <div class="control-card picture-card">
+                <h3>شعار البث أو صورتك 🖼️</h3>
+                <input type="file" id="image-uploader" accept="image/*" style="display: none;">
+                <button onclick="document.getElementById('image-uploader').click()" id="upload-btn">اختر صورة مخصصة 📁</button>
+                <div id="preview-container">
+                    <p style="color: rgba(255,255,255,0.4); font-size: 13px; text-align: center;">اضغط لرفع شعارك ليظهر هنا</p>
+                </div>
+            </div>
+
+            <div class="control-card">
+                <h3>اللاعبين المتواجدين حالياً (<span id="player-count">0</span>)</h3>
+                <ul id="host-players-list" class="host-list"></ul>
+            </div>
+        </div>
+
+        <div class="wheel-side">
+            <div class="wheel-wrapper">
+                <div class="pointer">▼</div>
+                <canvas id="wheel" width="500" height="500"></canvas>
+            </div>
+            
+            <div class="players-section">
+                <h2>اللاعبين المستمرين 🏆</h2>
+                <ul id="players-list"></ul>
+            </div>
+        </div>
+
+        <div class="footer-signature">تم إنشاء وتطوير اللعبة من قبل <span>أيمن</span> 🚀</div>
+    </div>
+
+    <div id="tribes-modal" class="modal">
+        <div class="modal-content">
+            <h2>اختر قبيلة لإقصاء صاحبها غدراً! 🏴‍☠️</h2>
+            <p id="picker-announcement" style="color: #00f5ff; font-weight: bold; margin-bottom: 15px;"></p>
+            <div id="tribes-grid" class="tribes-grid"></div>
+        </div>
+    </div>
+
+    <div id="revive-modal" class="modal">
+        <div class="modal-content">
+            <h2>محظوظ! طلعت مرتين ورا بعض 🔥</h2>
+            <p>اختر لاعباً واحداً لإعادته للحياة (لديك فرصة واحدة):</p>
+            <div id="revive-list" class="tribes-grid"></div>
+            <button class="btn-reset" onclick="closeReviveModal()" style="margin-top: 15px; width: 100%;">تخطي الإنقاذ ❌</button>
+        </div>
+    </div>
+
+    <div id="winner-modal" class="modal">
+        <div class="modal-content winner-content">
+            <h1 style="color: #00ff7f; text-shadow: 0 0 20px #00ff7f; font-size: 40px;">👑 البطل الفائز 👑</h1>
+            <h2 id="final-winner-name" style="font-size: 50px; margin: 20px 0; color: #fff;">-</h2>
+            <hr style="border: 1px solid var(--primary-purple); margin: 20px 0;">
+            <h3 style="color: #ffaa00;">⚔️ ملك الإقصاءات (أكثر غدرات):</h3>
+            <p id="top-killer-name" style="font-size: 24px; font-weight: bold; color: #00f5ff;">-</p>
+            <button class="btn-spin" onclick="location.reload()" style="margin-top: 30px;">جولة جديدة 🔄</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
