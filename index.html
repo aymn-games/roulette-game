@@ -10,6 +10,18 @@
     <!-- الخلفية المتحركة (الجزيئات المتطايرة) -->
     <div class="particles" id="particles"></div>
 
+    <!-- طبقة الإيموجي العائم (فرح / حزن) -->
+    <div class="emoji-float-layer" id="emoji-float-layer"></div>
+
+    <!-- الشعار العائم -->
+    <img src="logo.png" alt="شعار اللعبة" class="floating-logo" id="floating-logo">
+
+    <!-- متحكم مستوى الصوت -->
+    <div class="volume-control" id="volume-control">
+        <span class="volume-icon" id="volume-icon">🔊</span>
+        <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="70" aria-label="مستوى الصوت">
+    </div>
+
     <main class="game-container">
         <!-- قسم العجلة -->
         <section class="wheel-section">
@@ -37,12 +49,18 @@
         </section>
     </main>
 
+    <!-- الشريط الجانبي الدائم (يظهر بعد بدء الجولة ويحتضن حقل الأسماء وزر الإضافة) -->
+    <aside id="game-sidebar" class="game-sidebar hidden">
+        <h3>إدارة اللاعبين</h3>
+    </aside>
+
     <!-- نافذة القبائل (إقصاء / إرجاع) -->
     <div id="modal" class="modal" role="dialog" aria-modal="true">
         <div class="modal-content">
             <h2 id="modal-title">اختر قبيلة</h2>
             <p id="modal-subtitle" class="modal-subtitle"></p>
             <div id="tribes-container" class="tribes-grid"></div>
+            <div id="modal-actions" class="modal-actions"></div>
         </div>
     </div>
 
@@ -53,10 +71,14 @@
 
     <!-- نافذة إعلان الفائز النهائي -->
     <div id="winner-overlay" class="effect-overlay">
-        <div class="winner-box">
+        <div class="winner-card-pro">
             <div class="trophy">🏆</div>
+            <p class="winner-label">الفائز النهائي</p>
             <h2 id="winner-name"></h2>
-            <p id="winner-eliminator"></p>
+            <div class="winner-divider"></div>
+            <div class="eliminator-box">
+                <p id="winner-eliminator"></p>
+            </div>
             <button id="play-again-btn" class="btn btn-primary">لعبة جديدة</button>
         </div>
     </div>

@@ -59,7 +59,131 @@ body {
     100% { transform: translateY(-110vh) scale(1); opacity: 0; }
 }
 
-/* حاوية اللعبة الرئيسية */
+/* ============================================================
+   الشعار العائم (أسفل يسار الصفحة - بحجم مكبّر 2.5x إضافية)
+   ============================================================ */
+.floating-logo {
+    position: fixed;
+    bottom: 130px;
+    left: 24px;
+    width: 825px;
+    max-width: 55vw;
+    height: auto;
+    z-index: 45;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: drop-shadow(0 0 12px #80d4ff) drop-shadow(0 0 20px #b300ff);
+    animation: logoFloat 4s ease-in-out infinite, logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-16px) rotate(2deg); }
+}
+
+@keyframes logoPulse {
+    0%, 100% { filter: drop-shadow(0 0 12px #80d4ff) drop-shadow(0 0 18px #b300ff); }
+    50%      { filter: drop-shadow(0 0 22px #80d4ff) drop-shadow(0 0 32px #b300ff); }
+}
+
+/* ============================================================
+   طبقة الإيموجي العائم (فرح / حزن) - تظهر لمدة 3 ثوانٍ
+   ============================================================ */
+.emoji-float-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 250;
+    overflow: hidden;
+}
+
+.floating-emoji {
+    position: absolute;
+    bottom: -60px;
+    opacity: 0;
+    animation-name: emojiFloat;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.4));
+}
+
+@keyframes emojiFloat {
+    0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+    12%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(-105vh) translateX(var(--drift, 0px)) rotate(25deg); opacity: 0; }
+}
+
+/* ============================================================
+   متحكم مستوى الصوت
+   ============================================================ */
+.volume-control {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 5, 30, 0.85);
+    border: 2px solid #b300ff;
+    border-radius: 30px;
+    padding: 8px 16px;
+    box-shadow: 0 0 20px rgba(179, 0, 255, 0.5);
+    z-index: 60;
+}
+
+.volume-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 110px;
+    height: 6px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #b300ff, #80d4ff);
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+    border: none;
+}
+
+@media (max-width: 900px) {
+    .volume-control {
+        top: 10px;
+        left: 10px;
+        padding: 6px 12px;
+    }
+    .volume-slider {
+        width: 80px;
+    }
+}
 .game-container {
     display: flex;
     flex-wrap: wrap;
@@ -167,7 +291,7 @@ body {
     resize: vertical;
     box-shadow: 0 0 15px rgba(179, 0, 255, 0.4);
     outline: none;
-    transition: box-shadow 0.3s, border-color 0.3s;
+    transition: box-shadow 0.3s, border-color 0.3s, height 0.3s, font-size 0.3s;
     text-align: right;
 }
 
@@ -220,6 +344,56 @@ body {
 .btn-danger { background: linear-gradient(45deg, #800000, #ff3333); }
 .btn-danger:hover:not(:disabled) { box-shadow: 0 0 20px #ff3333; transform: translateY(-2px); }
 
+.btn-skip {
+    background: linear-gradient(45deg, #333, #666);
+    border: 1px solid #80d4ff;
+    width: 100%;
+}
+.btn-skip:hover:not(:disabled) {
+    box-shadow: 0 0 16px #80d4ff;
+    transform: translateY(-2px);
+}
+
+/* ============================================================
+   الشريط الجانبي الدائم أثناء الجولة
+   ============================================================ */
+.game-sidebar {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    width: 240px;
+    max-height: 65vh;
+    overflow-y: auto;
+    background: rgba(15, 5, 30, 0.88);
+    border: 2px solid #b300ff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 25px rgba(179, 0, 255, 0.5);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.game-sidebar h3 {
+    text-align: center;
+    font-size: 15px;
+    color: #fff;
+    text-shadow: 0 0 8px #b300ff;
+    margin-bottom: 4px;
+}
+
+.game-sidebar #names-input {
+    height: 120px;
+    font-size: 13px;
+    padding: 8px;
+}
+
+.game-sidebar #add-btn {
+    padding: 10px;
+    font-size: 13px;
+}
+
 /* النوافذ المنبثقة (القبائل) */
 .modal {
     display: none;
@@ -238,8 +412,10 @@ body {
     box-shadow: 0 0 35px #b300ff;
     padding: 30px;
     border-radius: 16px;
-    max-width: 600px;
+    max-width: 620px;
     width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
     text-align: center;
     animation: popIn 0.25s ease;
 }
@@ -258,7 +434,7 @@ body {
 
 .tribes-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
     gap: 15px;
     margin-top: 20px;
 }
@@ -270,7 +446,7 @@ body {
     border-radius: 8px;
     cursor: pointer;
     font-weight: bold;
-    font-size: 15px;
+    font-size: 14px;
     transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
@@ -278,6 +454,10 @@ body {
     background: #80d4ff;
     color: #000;
     transform: scale(1.05);
+}
+
+.modal-actions {
+    margin-top: 6px;
 }
 
 /* تأثيرات الفرح والحزن */
@@ -316,30 +496,65 @@ body {
     50% { transform: translateY(-18px) scale(1.05); }
 }
 
-/* نافذة إعلان الفائز */
-.winner-box {
+/* ============================================================
+   بطاقة الفوز الاحترافية
+   ============================================================ */
+.winner-card-pro {
     text-align: center;
-    padding: 40px;
-    animation: popIn 0.4s ease;
+    padding: 50px 40px;
+    border-radius: 22px;
+    max-width: 480px;
+    width: 100%;
+    background: linear-gradient(160deg, rgba(26,0,51,0.97), rgba(8,0,18,0.98));
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 50px #ffd700, 0 0 30px #b300ff inset;
+    animation: popIn 0.45s ease, winnerGlow 2.6s ease-in-out infinite;
+}
+
+@keyframes winnerGlow {
+    0%, 100% { box-shadow: 0 0 45px #ffd700, 0 0 25px #b300ff inset; }
+    50%      { box-shadow: 0 0 80px #ffd700, 0 0 45px #b300ff inset; }
 }
 
 .trophy {
-    font-size: 70px;
-    margin-bottom: 10px;
+    font-size: 74px;
+    margin-bottom: 6px;
     animation: bounce 1s infinite;
+}
+
+.winner-label {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #80d4ff;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.9;
 }
 
 #winner-name {
     font-size: 40px;
     color: #ffd700;
     text-shadow: 0 0 25px #ffd700, 0 0 10px #b300ff;
-    margin-bottom: 14px;
+}
+
+.winner-divider {
+    width: 55%;
+    height: 1px;
+    margin: 20px auto;
+    background: linear-gradient(90deg, transparent, #b300ff, transparent);
+}
+
+.eliminator-box {
+    background: rgba(179, 0, 255, 0.12);
+    border: 1px solid rgba(128, 212, 255, 0.4);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 26px;
 }
 
 #winner-eliminator {
-    font-size: 20px;
+    font-size: 17px;
     color: #80d4ff;
-    margin-bottom: 26px;
 }
 
 /* صندوق الرسائل السريعة */
@@ -398,6 +613,23 @@ footer {
 }
 
 /* تجاوب مع الشاشات الصغيرة */
+@media (max-width: 900px) {
+    .floating-logo {
+        bottom: 80px;
+        left: 12px;
+        width: 480px;
+        max-width: 65vw;
+    }
+    .game-sidebar {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        margin: 20px auto 0;
+        top: auto;
+        right: auto;
+    }
+}
+
 @media (max-width: 720px) {
     .game-container {
         flex-direction: column;
@@ -408,4 +640,5 @@ footer {
     .tribes-grid { grid-template-columns: repeat(2, 1fr); }
     #winner-name { font-size: 28px; }
     .effect-content { font-size: 24px; }
+    .winner-card-pro { padding: 34px 22px; }
 }

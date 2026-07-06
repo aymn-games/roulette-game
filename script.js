@@ -2,22 +2,36 @@
 //  لعبة روليت القبائل - المنطق الكامل
 // ============================================================
 
-// أسماء القبائل السعودية المستخدمة للتمويه فقط (لا تؤثر على النتيجة)
+// قائمة القبائل السعودية الرسمية المستخدمة في نافذة الاختيار
 const saudiTribes = [
-    "عتيبة", "عنزة", "مطير", "قحطان", "شمر", "الدواسر", "بني تميم",
-    "حرب", "غامد", "زهران", "الأشراف", "سبيع", "السهول", "يام",
-    "بني خالد", "عسير", "المنتفق", "بني شهر", "شمران", "بالقرن"
+    "قبيلة عتيبة", "قبيلة قحطان", "قبيلة عنزة", "قبيلة حرب", "قبيلة زهران",
+    "قبيلة مطير", "قبيلة غامد", "قبيلة شمر", "قبيلة بنو شهر", "قبيلة الدواسر",
+    "قبيلة شهران", "قبيلة عسير", "قبيلة جهينة", "قبيلة العجمان", "قبيلة الأشراف",
+    "قبيلة البقوم", "قبيلة سبيع"
 ];
 
 // كل عنصر على العجلة له اسم + معرف فريد (uid) حتى نستطيع تمييز الأسماء المكررة عن بعضها
 let players = [];          // [{ uid, name }]
 let eliminatedPlayers = []; // [{ uid, name }]
 let eliminationCounts = {}; // { name: عدد مرات الإقصاء }
+let reentryUsed = {};       // { name: true } - اللاعب استخدم فرصة إرجاعه الوحيدة بالفعل
 let uidCounter = 0;
 
 let currentAngle = 0;      // بالراديان
 let isSpinning = false;
 let landedIndex = null;    // الفهرس الذي توقفت عنده العجلة في هذه الجولة
+let lastLandedName = null; // اسم آخر لاعب هبطت عليه العجلة (لمقارنة التتالي)
+
+// خلط حقيقي وعادل إحصائياً (خوارزمية Fisher-Yates) - يُستخدم في كل مكان
+// نحتاج فيه لعشوائية احترافية بدل sort(() => 0.5 - Math.random()) المتحيّزة
+function shuffleArray(inputArray) {
+    const arr = [...inputArray];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
 
 // ---------- عناصر الواجهة ----------
 const canvas = document.getElementById('wheel');
@@ -32,6 +46,7 @@ const modal = document.getElementById('modal');
 const modalTitle = document.getElementById('modal-title');
 const modalSubtitle = document.getElementById('modal-subtitle');
 const tribesContainer = document.getElementById('tribes-container');
+const modalActions = document.getElementById('modal-actions');
 const effectOverlay = document.getElementById('effect-overlay');
 const effectContent = document.getElementById('effect-content');
 const winnerOverlay = document.getElementById('winner-overlay');
@@ -40,6 +55,13 @@ const winnerEliminatorEl = document.getElementById('winner-eliminator');
 const playAgainBtn = document.getElementById('play-again-btn');
 const playerCountEl = document.getElementById('player-count');
 const toastEl = document.getElementById('toast');
+const gameSidebar = document.getElementById('game-sidebar');
+
+// نحفظ الموضع الأصلي لحقل الأسماء وزر الإضافة حتى نستطيع إعادتهما بعد إعادة التعيين
+const namesInputHomeParent = namesInput.parentNode;
+const namesInputHomeNext = namesInput.nextSibling;
+const addBtnHomeParent = addBtn.parentNode;
+const addBtnHomeNext = addBtn.nextSibling;
 
 // ============================================================
 //  خلفية الجزيئات المتطايرة
@@ -62,6 +84,32 @@ function createParticles() {
 createParticles();
 
 // ============================================================
+//  تأثير الإيموجي العائم (فرح / حزن) لمدة 3 ثوانٍ
+// ============================================================
+const emojiFloatLayer = document.getElementById('emoji-float-layer');
+const SAD_EMOJIS = ['😢', '💔', '😞'];
+const HAPPY_EMOJIS = ['🥳', '🎉', '✨'];
+
+function spawnFloatingEmojis(type) {
+    if (!emojiFloatLayer) return;
+    const emojiSet = type === 'sad' ? SAD_EMOJIS : HAPPY_EMOJIS;
+    const count = 16;
+
+    for (let i = 0; i < count; i++) {
+        const span = document.createElement('span');
+        span.className = 'floating-emoji';
+        span.textContent = emojiSet[Math.floor(Math.random() * emojiSet.length)];
+        span.style.left = (Math.random() * 100) + 'vw';
+        span.style.fontSize = (22 + Math.random() * 22) + 'px';
+        span.style.setProperty('--drift', (Math.random() * 140 - 70) + 'px');
+        span.style.animationDuration = (2.3 + Math.random() * 0.7) + 's';
+        span.style.animationDelay = (Math.random() * 0.35) + 's';
+        emojiFloatLayer.appendChild(span);
+        setTimeout(() => span.remove(), 3200);
+    }
+}
+
+// ============================================================
 //  رسالة سريعة بدل alert()
 // ============================================================
 let toastTimeout = null;
@@ -70,6 +118,103 @@ function showToast(message) {
     toastEl.textContent = message;
     toastEl.classList.add('show');
     toastTimeout = setTimeout(() => toastEl.classList.remove('show'), 2600);
+}
+
+// ============================================================
+//  المؤثرات الصوتية عبر Web Audio API (بدون ملفات خارجية)
+// ============================================================
+let audioCtx = null;
+let masterVolume = 0.7; // يتحكم بها منزلق مستوى الصوت في الواجهة
+
+function getAudioCtx() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
+// صوت "تك" قصير أثناء دوران العجلة
+function playTickSound() {
+    if (masterVolume <= 0) return;
+    try {
+        const ac = getAudioCtx();
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 750 + Math.random() * 250;
+        gain.gain.setValueAtTime(0.16 * masterVolume, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.09);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start();
+        osc.stop(ac.currentTime + 0.09);
+    } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
+}
+
+// صوت احتفالي عند إعلان الفائز النهائي
+function playVictorySound() {
+    if (masterVolume <= 0) return;
+    try {
+        const ac = getAudioCtx();
+        const now = ac.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+        notes.forEach((freq, i) => {
+            const osc = ac.createOscillator();
+            const gain = ac.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            const t = now + i * 0.16;
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.22 * masterVolume, t + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+            osc.connect(gain);
+            gain.connect(ac.destination);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        });
+    } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
+}
+
+// ---------- ربط منزلق مستوى الصوت بالواجهة ----------
+const volumeSlider = document.getElementById('volume-slider');
+const volumeIcon = document.getElementById('volume-icon');
+
+function updateVolumeIcon() {
+    if (!volumeIcon) return;
+    if (masterVolume <= 0) volumeIcon.textContent = '🔇';
+    else if (masterVolume < 0.5) volumeIcon.textContent = '🔉';
+    else volumeIcon.textContent = '🔊';
+}
+
+if (volumeSlider) {
+    volumeSlider.value = Math.round(masterVolume * 100);
+    volumeSlider.addEventListener('input', () => {
+        masterVolume = Number(volumeSlider.value) / 100;
+        updateVolumeIcon();
+    });
+    updateVolumeIcon();
+}
+
+// جدولة أصوات التكتكة بشكل يتباطأ تدريجياً مع تباطؤ العجلة
+let tickTimeoutId = null;
+function scheduleSpinTicks(spinTimeTotal) {
+    let elapsed = 0;
+    function tick() {
+        if (!isSpinning) return;
+        playTickSound();
+        elapsed += 30;
+        const progress = Math.min(elapsed / spinTimeTotal, 1);
+        const delay = 55 + progress * 260; // كلما اقتربت النهاية كلما زاد التأخير (تباطؤ)
+        tickTimeoutId = setTimeout(tick, delay);
+    }
+    tick();
+}
+function stopSpinTicks() {
+    clearTimeout(tickTimeoutId);
+    tickTimeoutId = null;
 }
 
 // ============================================================
@@ -162,6 +307,8 @@ addBtn.addEventListener('click', () => {
     players = names.map(name => ({ uid: ++uidCounter, name }));
     eliminatedPlayers = [];
     eliminationCounts = {};
+    reentryUsed = {};
+    lastLandedName = null;
     names.forEach(n => { eliminationCounts[n] = 0; });
     currentAngle = 0;
 
@@ -171,7 +318,8 @@ addBtn.addEventListener('click', () => {
 });
 
 // ============================================================
-//  زر بدء الجولة
+//  زر بدء الجولة - ينقل حقل الأسماء وزر الإضافة إلى الشريط الجانبي
+//  بدلاً من إخفائهما بالكامل، ليبقيا متاحين أثناء اللعب
 // ============================================================
 startBtn.addEventListener('click', () => {
     if (players.length < 2) return;
@@ -179,37 +327,82 @@ startBtn.addEventListener('click', () => {
     shuffleBtn.classList.remove('hidden');
     resetBtn.classList.remove('hidden');
     startBtn.classList.add('hidden');
-    namesInput.classList.add('hidden');
-    addBtn.classList.add('hidden');
+
+    gameSidebar.appendChild(namesInput);
+    gameSidebar.appendChild(addBtn);
+    gameSidebar.classList.remove('hidden');
 });
 
 // ============================================================
 //  التدوير
 // ============================================================
+
+// يختار فهرس اللاعب "الهدف" الذي ستهبط عليه العجلة، مع تقليل احتمالية
+// تكرار نفس اللاعب الذي هبطت عليه العجلة في الجولة السابقة مباشرة - بدون
+// استبعاده كلياً، فقط تقليل وزنه الاحتمالي حتى يبقى التكرار نادراً وطبيعياً
+function pickWeightedLandingIndex() {
+    const weights = players.map(p => (p.name === lastLandedName ? 0.12 : 1));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < weights.length; i++) {
+        r -= weights[i];
+        if (r <= 0) return i;
+    }
+    return weights.length - 1;
+}
+
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
 spinBtn.addEventListener('click', () => {
     if (isSpinning || players.length < 2) return;
     isSpinning = true;
     spinBtn.disabled = true;
 
-    const spinAngleStart = Math.random() * 10 + 15; // سرعة ابتدائية (درجة/فريم تقريباً)
-    const spinTimeTotal = Math.random() * 2500 + 4500;
-    let spinTime = 0;
+    const numSegments = players.length;
+    const segmentAngleDeg = 360 / numSegments;
+    const targetIndex = pickWeightedLandingIndex();
 
-    function rotateWheel() {
-        spinTime += 30;
-        if (spinTime >= spinTimeTotal) {
+    // نهبط في نقطة عشوائية آمنة داخل القطاع (بين 20% و80% من عرضه) حتى
+    // لا يستقر السهم دائماً بالضبط على حدود القطاع
+    const jitter = segmentAngleDeg * (0.2 + Math.random() * 0.6);
+    const desiredRelativeDeg = targetIndex * segmentAngleDeg + jitter;
+
+    const pointerDeg = 270;
+    let finalAngleDegMod = (pointerDeg - desiredRelativeDeg + 360) % 360;
+    const finalAngleModRad = finalAngleDegMod * Math.PI / 180;
+
+    const twoPi = 2 * Math.PI;
+    const currentMod = ((currentAngle % twoPi) + twoPi) % twoPi;
+    let deltaToTarget = (finalAngleModRad - currentMod + twoPi) % twoPi;
+
+    const fullSpins = 5 + Math.floor(Math.random() * 3); // 5 إلى 7 لفات كاملة لإحساس احترافي بالدوران
+    const totalDelta = deltaToTarget + fullSpins * twoPi;
+
+    const startAngle = currentAngle;
+    const spinTimeTotal = Math.random() * 2000 + 5000; // 5 إلى 7 ثوانٍ
+    const startTime = performance.now();
+
+    scheduleSpinTicks(spinTimeTotal);
+
+    function rotateWheel(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / spinTimeTotal, 1);
+        const eased = easeOutCubic(progress);
+        currentAngle = startAngle + totalDelta * eased;
+        drawWheel();
+
+        if (progress >= 1) {
             isSpinning = false;
             spinBtn.disabled = false;
+            stopSpinTicks();
             resolveLanding();
         } else {
-            const progress = spinTime / spinTimeTotal;
-            const ease = spinAngleStart * (1 - progress); // تباطؤ خطي بسيط
-            currentAngle += (ease * Math.PI / 180);
-            drawWheel();
             requestAnimationFrame(rotateWheel);
         }
     }
-    rotateWheel();
+    requestAnimationFrame(rotateWheel);
 });
 
 // تحديد الاسم الذي يستقر عنده السهم العلوي (السهم عند زاوية 270°)
@@ -229,104 +422,184 @@ function resolveLanding() {
 
 // ============================================================
 //  فتح النافذة المناسبة حسب الحالة (إقصاء عادي أو إرجاع لاعب)
+//  قاعدة الإرجاع الآن: يجب أن تهبط العجلة على نفس اسم اللاعب مرتين
+//  متتاليتين (بين جولتين متعاقبتين) حتى تُفتح نافذة الإرجاع
 // ============================================================
 function openDecisionModal() {
     const landedName = players[landedIndex].name;
-    const duplicateCount = players.filter(p => p.name === landedName).length;
+    const isConsecutiveMatch = (landedName === lastLandedName);
 
-    if (duplicateCount >= 2) {
+    // نحدّث المتتبع فوراً حتى تُقاس الجولة القادمة بشكل صحيح
+    lastLandedName = landedName;
+
+    if (isConsecutiveMatch) {
         openReentryModal();
     } else {
         openEliminationModal();
     }
 }
 
+// ينشئ قائمة بطاقات قبلية بعدد "count" بالضبط، ويكرر القائمة مع ترقيم
+// إذا تجاوز عدد اللاعبين عدد القبائل المتاحة
 function randomTribeCards(count) {
-    const shuffled = [...saudiTribes].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count);
+    let pool = [];
+    while (pool.length < count) {
+        pool = pool.concat(shuffleArray(saudiTribes));
+    }
+    pool = pool.slice(0, count);
+
+    const seen = {};
+    return pool.map(t => {
+        seen[t] = (seen[t] || 0) + 1;
+        return seen[t] > 1 ? `${t} (${seen[t]})` : t;
+    });
 }
 
 // -------- النافذة القياسية (إقصاء) --------
+// اللاعب الذي هبطت عليه العجلة هو من "يختار" القبيلة، لكن القبائل تخفي
+// خلفها بقية اللاعبين النشطين فقط - لا يمكنه أبداً استهداف أو إقصاء نفسه.
+// عدد البطاقات يبقى مساوياً لعدد اللاعبين النشطين: بطاقة واحدة منها "آمنة"
+// (تمثل اللاعب المختار نفسه) ولا تؤدي أبداً لإقصاء أحد إن تم اختيارها.
 function openEliminationModal() {
-    modalTitle.textContent = "اختر قبيلة";
-    modalSubtitle.textContent = "اختر إحدى القبائل لكشف مصير اللاعب المختار";
-    tribesContainer.innerHTML = "";
+    const chooserName = players[landedIndex].name;
 
-    randomTribeCards(6).forEach(tribe => {
+    modalTitle.textContent = "اختر قبيلة";
+    modalSubtitle.textContent = `${chooserName} يختار قبيلة لتحديد من سيتم استهدافه من بقية اللاعبين`;
+    tribesContainer.innerHTML = "";
+    modalActions.innerHTML = "";
+
+    // بقية اللاعبين النشطين (باستثناء اللاعب المختار نفسه) هم الأهداف المحتملة
+    const otherPlayers = players.filter((p, idx) => idx !== landedIndex);
+    const shuffledOthers = shuffleArray(otherPlayers);
+
+    // نضيف فتحة "آمنة" واحدة تمثل اللاعب المختار حتى يبقى عدد البطاقات = عدد اللاعبين النشطين
+    const targetSlots = shuffleArray([...shuffledOthers, null]);
+
+    const tribeLabels = randomTribeCards(targetSlots.length);
+
+    targetSlots.forEach((targetPlayer, i) => {
         const card = document.createElement('div');
         card.classList.add('tribe-card');
-        card.textContent = `قبيلة: ${tribe}`;
-        card.addEventListener('click', handleEliminationChoice, { once: true });
+        card.textContent = tribeLabels[i];
+        const targetUid = targetPlayer ? targetPlayer.uid : null;
+        card.addEventListener('click', () => handleEliminationChoice(targetUid), { once: true });
         tribesContainer.appendChild(card);
     });
 
     modal.style.display = 'flex';
 }
 
-function handleEliminationChoice() {
+function handleEliminationChoice(targetUid) {
     modal.style.display = 'none';
-    const pName = players[landedIndex].name;
+
+    // الفتحة الآمنة - لا يوجد هدف خلفها فلا يُقصى أحد
+    if (targetUid === null) {
+        triggerEffect(`قبيلة الأمان! 🛡️<br>لم يتم استهداف أحد في هذه الجولة`, 'joy-effect');
+        afterDecision();
+        return;
+    }
+
+    const targetIdx = players.findIndex(p => p.uid === targetUid);
+    if (targetIdx === -1) {
+        // إجراء احترازي فقط في حال تغيّرت القائمة بشكل غير متوقع
+        afterDecision();
+        return;
+    }
+    const pName = players[targetIdx].name;
 
     const eliminationChance = Math.floor(Math.random() * 5); // 0..4
     if (eliminationChance !== 0) {
         // نجاح الإقصاء (4 من 5 = 80%)
-        players.splice(landedIndex, 1);
+        players.splice(targetIdx, 1);
         eliminatedPlayers.push({ name: pName });
         eliminationCounts[pName] = (eliminationCounts[pName] || 0) + 1;
         triggerEffect(`تم إقصاء اللاعب ❌<br>[ ${pName} ]`, 'sad-effect');
+        spawnFloatingEmojis('sad');
     } else {
-        // فشل الإقصاء (1 من 5 = 20%) - يبقى مخفياً في العجلة
-        triggerEffect(`إقصاء فاشل! 😎<br>نجا اللاعب المستهدف خلف القبيلة!`, 'joy-effect');
+        // فشل الإقصاء (1 من 5 = 20%) - يبقى مخفياً خلف القبيلة
+        triggerEffect(`إقصاء فاشل! 😎<br>نجا [ ${pName} ] خلف القبيلة!`, 'joy-effect');
+        spawnFloatingEmojis('happy');
     }
 
     afterDecision();
 }
 
-// -------- نافذة الإرجاع (عند اسم مكرر) --------
+// -------- نافذة الإرجاع --------
+// تُفتح هذه النافذة حصراً عندما تهبط العجلة على نفس اسم اللاعب مرتين
+// متتاليتين. أسماء اللاعبين المقصيين تبقى مخفية تماماً خلف أسماء القبائل،
+// ويُسمح لكل لاعب مقصي بالعودة مرة واحدة فقط طوال اللعبة (عبر reentryUsed)
 function openReentryModal() {
-    modalTitle.textContent = "فرصة إرجاع لاعب!";
+    modalTitle.textContent = "فرصة إرجاع لاعب! (هبطت العجلة على نفس الاسم مرتين متتاليتين)";
+    modalActions.innerHTML = "";
 
-    // هذا الاسم تكرر على العجلة - نستهلك هذا الموضع كـ "بطاقة حظ" لإرجاع مقصي سابقاً
-    if (eliminatedPlayers.length === 0) {
+    // نحدد فقط اللاعبين المقصيين الذين لم يستخدموا فرصة إرجاعهم الوحيدة بعد
+    const eligibleIndices = eliminatedPlayers
+        .map((p, idx) => idx)
+        .filter(idx => !reentryUsed[eliminatedPlayers[idx].name]);
+
+    if (eligibleIndices.length === 0) {
         modalSubtitle.textContent = "";
-        showToast("لا يوجد لاعبين مقصيين لإرجاعهم حالياً");
-        players.splice(landedIndex, 1); // استهلاك الموضع المكرر
+        tribesContainer.innerHTML = "";
+        showToast("لا يوجد لاعبين مؤهلين للإرجاع حالياً");
         finishRoundOrDraw();
         return;
     }
 
-    modalSubtitle.textContent = "اختر قبيلة لمحاولة إرجاع لاعب مقصي بشكل عشوائي";
+    modalSubtitle.textContent = "اختر قبيلة لمحاولة إرجاع لاعب مقصي بشكل عشوائي (الأسماء الحقيقية مخفية)";
     tribesContainer.innerHTML = "";
 
-    const tribeLabels = randomTribeCards(eliminatedPlayers.length);
-    eliminatedPlayers.forEach((elim, idx) => {
+    const tribeLabels = randomTribeCards(eligibleIndices.length);
+    eligibleIndices.forEach((originalIdx, i) => {
         const card = document.createElement('div');
         card.classList.add('tribe-card');
-        card.textContent = `قبيلة: ${tribeLabels[idx] || ('#' + (idx + 1))}`;
-        card.addEventListener('click', () => handleReentryChoice(idx), { once: true });
+        card.textContent = tribeLabels[i];
+        card.addEventListener('click', () => handleReentryChoice(originalIdx), { once: true });
         tribesContainer.appendChild(card);
     });
+
+    // زر التخطي - لمن يريد المتابعة دون محاولة إرجاع أحد
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = "تخطي";
+    skipBtn.classList.add('btn', 'btn-skip');
+    skipBtn.addEventListener('click', handleSkipReentry, { once: true });
+    modalActions.appendChild(skipBtn);
 
     modal.style.display = 'flex';
 }
 
-function handleReentryChoice(chosenIdx) {
+function handleReentryChoice(originalIdx) {
     modal.style.display = 'none';
+    modalActions.innerHTML = "";
 
-    // استهلاك الموضع المكرر الذي أدى لهذه الفرصة
-    players.splice(landedIndex, 1);
+    // نعيد تصفير عداد التتالي فوراً بمجرد اتخاذ القرار، حتى لا يُفتح
+    // إشعار الإرجاع مرة أخرى تلقائياً إذا هبط نفس الاسم لاحقاً (المرة الثالثة
+    // مثلاً تُعامل كهدف عادي وليس فرصة إرجاع جديدة)
+    lastLandedName = null;
 
     // احتمال 1 من 3 لنجاح الإرجاع
     const outcome = Math.floor(Math.random() * 3); // 0..2
     if (outcome === 0) {
-        const [returned] = eliminatedPlayers.splice(chosenIdx, 1);
+        const [returned] = eliminatedPlayers.splice(originalIdx, 1);
+        reentryUsed[returned.name] = true; // استهلاك فرصة الإرجاع الوحيدة لهذا اللاعب نهائياً
         players.push({ uid: ++uidCounter, name: returned.name });
         triggerEffect(`إرجاع ناجح! 🥳<br>عاد اللاعب [ ${returned.name} ] إلى اللعبة`, 'joy-effect');
+        spawnFloatingEmojis('happy');
     } else {
         triggerEffect(`لم يعد أحد! 🙃<br>حظ أوفر في المرة القادمة`, 'joy-effect');
     }
 
     afterDecision();
+}
+
+function handleSkipReentry() {
+    modal.style.display = 'none';
+    modalActions.innerHTML = "";
+
+    // نفس منطق التصفير: التخطي أيضاً يُنهي سلسلة التتالي الحالية بشكل كامل
+    lastLandedName = null;
+
+    showToast("تم تخطي فرصة الإرجاع، متابعة اللعب...");
+    finishRoundOrDraw();
 }
 
 // ============================================================
@@ -373,13 +646,14 @@ function showFinalWinner() {
         }
     });
 
-    winnerNameEl.textContent = `الفائز: ${winner}`;
+    winnerNameEl.textContent = winner;
     winnerEliminatorEl.textContent = topEliminator
-        ? `صاحب أكثر إقصاءات: ${topEliminator} (${topCount})`
+        ? `👑 صاحب أكثر إقصاءات: ${topEliminator} (${topCount})`
         : `لم تُسجَّل أي عمليات إقصاء`;
 
     spinBtn.classList.add('hidden');
     winnerOverlay.style.display = 'flex';
+    playVictorySound();
 }
 
 // ============================================================
@@ -387,7 +661,7 @@ function showFinalWinner() {
 // ============================================================
 shuffleBtn.addEventListener('click', () => {
     if (isSpinning) return;
-    players.sort(() => Math.random() - 0.5);
+    players = shuffleArray(players);
     drawWheel();
     showToast("تم إعادة ترتيب اللاعبين عشوائياً");
 });
@@ -399,13 +673,21 @@ function resetGame() {
     players = [];
     eliminatedPlayers = [];
     eliminationCounts = {};
+    reentryUsed = {};
+    lastLandedName = null;
     currentAngle = 0;
     isSpinning = false;
     landedIndex = null;
+    stopSpinTicks();
 
     drawEmptyWheel();
     updatePlayerCount();
     namesInput.value = "";
+
+    // إعادة حقل الأسماء وزر الإضافة إلى موضعهما الأصلي في قسم التحكم
+    namesInputHomeParent.insertBefore(namesInput, namesInputHomeNext);
+    addBtnHomeParent.insertBefore(addBtn, addBtnHomeNext);
+    gameSidebar.classList.add('hidden');
 
     namesInput.classList.remove('hidden');
     addBtn.classList.remove('hidden');
@@ -417,6 +699,7 @@ function resetGame() {
     winnerOverlay.style.display = 'none';
     effectOverlay.style.display = 'none';
     modal.style.display = 'none';
+    modalActions.innerHTML = "";
 }
 
 resetBtn.addEventListener('click', resetGame);
