@@ -1,271 +1,423 @@
+// ============================================================
+//  لعبة روليت القبائل - المنطق الكامل
+// ============================================================
+
+// أسماء القبائل السعودية المستخدمة للتمويه فقط (لا تؤثر على النتيجة)
+const saudiTribes = [
+    "عتيبة", "عنزة", "مطير", "قحطان", "شمر", "الدواسر", "بني تميم",
+    "حرب", "غامد", "زهران", "الأشراف", "سبيع", "السهول", "يام",
+    "بني خالد", "عسير", "المنتفق", "بني شهر", "شمران", "بالقرن"
+];
+
+// كل عنصر على العجلة له اسم + معرف فريد (uid) حتى نستطيع تمييز الأسماء المكررة عن بعضها
+let players = [];          // [{ uid, name }]
+let eliminatedPlayers = []; // [{ uid, name }]
+let eliminationCounts = {}; // { name: عدد مرات الإقصاء }
+let uidCounter = 0;
+
+let currentAngle = 0;      // بالراديان
+let isSpinning = false;
+let landedIndex = null;    // الفهرس الذي توقفت عنده العجلة في هذه الجولة
+
+// ---------- عناصر الواجهة ----------
 const canvas = document.getElementById('wheel');
 const ctx = canvas.getContext('2d');
-const playersList = document.getElementById('players-list');
 const namesInput = document.getElementById('names-input');
-const addNamesBtn = document.getElementById('add-names-btn');
-const hostPlayersList = document.getElementById('host-players-list');
-const playerCountSpan = document.getElementById('player-count');
-const hostSpinBtn = document.getElementById('host-spin-btn');
+const addBtn = document.getElementById('add-btn');
+const startBtn = document.getElementById('start-btn');
+const spinBtn = document.getElementById('spin-btn');
 const shuffleBtn = document.getElementById('shuffle-btn');
 const resetBtn = document.getElementById('reset-btn');
-const startRoundBtn = document.getElementById('start-round-btn');
-const gameActions = document.getElementById('game-actions');
-// متغيرات القواعد الجديدة
-let players = [];
-let deadPlayers = [];
-let lastWinner = ""; // لحساب التكرار مرتين ورا بعض
-let stats = {}; // لحساب عدد الإقصاءات لكل لاعب
-let hasUsedRevive = {}; // لحساب إذا استخدم محاولة إنقاذ واحدة
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modal-title');
+const modalSubtitle = document.getElementById('modal-subtitle');
+const tribesContainer = document.getElementById('tribes-container');
+const effectOverlay = document.getElementById('effect-overlay');
+const effectContent = document.getElementById('effect-content');
+const winnerOverlay = document.getElementById('winner-overlay');
+const winnerNameEl = document.getElementById('winner-name');
+const winnerEliminatorEl = document.getElementById('winner-eliminator');
+const playAgainBtn = document.getElementById('play-again-btn');
+const playerCountEl = document.getElementById('player-count');
+const toastEl = document.getElementById('toast');
 
-// قائمة القبائل السعودية (سيتم السحب منها عشوائياً حسب عدد اللاعبين)
-const SaudiTribesList = ["عتيبة", "قحطان", "عنزة", "الدواسر", "شمر", "مطير", "غامد", "زهران", "حرب", "بني تميم", "سبيع", "سهول", "بني خالد", "يام", "السهول", "بني شهر", "بلقرن", "عسير", "جهينة", "الحويطات", "الرشيدي", "بني مالك", "ثقيف"];
+// ============================================================
+//  خلفية الجزيئات المتطايرة
+// ============================================================
+function createParticles() {
+    const pContainer = document.getElementById('particles');
+    const count = window.innerWidth < 600 ? 20 : 40;
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.classList.add('particle');
+        p.style.left = Math.random() * 100 + 'vw';
+        const size = Math.random() * 6 + 4;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.animationDelay = Math.random() * 8 + 's';
+        p.style.animationDuration = (Math.random() * 6 + 6) + 's';
+        pContainer.appendChild(p);
+    }
+}
+createParticles();
 
-let startAngle = 0;
-let arc = 0;
-let spinTimeout = null;
-let spinAngleStart = 10;
-let spinTime = 0;
-let spinTimeTotal = 0;
-let roundStarted = false;
-const colors = ["#8a2be2", "#1a1f3c", "#00f5ff", "#0b0c10", "#4b0082", "#000080"];
-
-function updateAllUI() {
-    hostPlayersList.innerHTML = '';
-    playerCountSpan.textContent = players.length;
-    
-    players.forEach((player, index) => {
-        const li = document.createElement('li');
-        li.innerHTML = `<span>${player}</span> <button class="btn-delete" onclick="deletePlayer(${index})">إقصاء ❌</button>`;
-        hostPlayersList.appendChild(li);
-    });
-
-    playersList.innerHTML = '';
-    players.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = p;
-        playersList.appendChild(li);
-    });
-
-    drawRouletteWheel();
-    checkGameOver();
+// ============================================================
+//  رسالة سريعة بدل alert()
+// ============================================================
+let toastTimeout = null;
+function showToast(message) {
+    clearTimeout(toastTimeout);
+    toastEl.textContent = message;
+    toastEl.classList.add('show');
+    toastTimeout = setTimeout(() => toastEl.classList.remove('show'), 2600);
 }
 
-function drawRouletteWheel() {
-    ctx.clearRect(0,0,500,500);
+// ============================================================
+//  رسم العجلة
+// ============================================================
+function drawEmptyWheel() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 210, 0, 2 * Math.PI);
+    ctx.fillStyle = "#111";
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#80d4ff";
+    ctx.stroke();
+
+    ctx.fillStyle = "#80d4ff";
+    ctx.font = "20px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("أدخل الأسماء للبدء", canvas.width / 2, canvas.height / 2);
+}
+drawEmptyWheel();
+
+function drawWheel() {
     if (players.length === 0) {
-        ctx.fillStyle = "white"; ctx.font = 'bold 20px Segoe UI'; ctx.textAlign = "center";
-        ctx.fillText("قم بإضافة الأسماء للبدء...", 250, 250); return;
+        drawEmptyWheel();
+        return;
     }
-    arc = Math.PI / (players.length / 2);
-    ctx.strokeStyle = "#8a2be2"; ctx.lineWidth = 2;
-    for(let i = 0; i < players.length; i++) {
-        let angle = startAngle + i * arc;
-        ctx.fillStyle = colors[i % colors.length];
-        ctx.beginPath(); ctx.arc(250, 250, 230, angle, angle + arc, false); ctx.lineTo(250, 250); ctx.fill(); ctx.stroke();
-        ctx.save(); ctx.fillStyle = "white"; ctx.font = 'bold 16px Segoe UI';
-        ctx.translate(250 + Math.cos(angle + arc / 2) * 140, 250 + Math.sin(angle + arc / 2) * 140);
-        ctx.rotate(angle + arc / 2 + Math.PI / 2); ctx.textAlign = "center";
-        ctx.fillText(players[i], 0, 0); ctx.restore();
+    const numSegments = players.length;
+    const segmentAngle = (2 * Math.PI) / numSegments;
+    const radius = 210;
+
+    // حجم الخط يتقلص تلقائياً كلما زاد عدد اللاعبين حتى تبقى الأسماء مقروءة
+    const fontSize = Math.max(11, Math.min(18, 260 / numSegments));
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < numSegments; i++) {
+        const startAng = currentAngle + i * segmentAngle;
+        const endAng = startAng + segmentAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, canvas.height / 2);
+        ctx.arc(canvas.width / 2, canvas.height / 2, radius, startAng, endAng);
+        ctx.closePath();
+        ctx.fillStyle = (i % 2 === 0) ? '#330066' : '#111';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#80d4ff';
+        ctx.stroke();
+
+        // كتابة اسم اللاعب داخل قطاعه
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(startAng + segmentAngle / 2);
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#80d4ff";
+        ctx.font = `bold ${fontSize}px Arial`;
+
+        let label = players[i].name;
+        const maxChars = Math.max(6, Math.floor(numSegments <= 8 ? 16 : 10));
+        if (label.length > maxChars) label = label.slice(0, maxChars - 1) + "…";
+
+        ctx.fillText(label, radius - 15, 5);
+        ctx.restore();
     }
+
+    updatePlayerCount();
 }
 
-addNamesBtn.addEventListener('click', () => {
-    const text = namesInput.value.trim();
-    if (!text) return;
-    const newNames = text.split('\n').map(name => name.trim()).filter(name => name.length > 0);
-    newNames.forEach(name => {
-        if(!players.includes(name)) {
-            players.push(name);
-            stats[name] = 0;
-            hasUsedRevive[name] = false;
+function updatePlayerCount() {
+    playerCountEl.textContent = players.length > 0
+        ? `عدد اللاعبين على العجلة: ${players.length}`
+        : "";
+}
+
+// ============================================================
+//  زر إضافة اللاعبين
+// ============================================================
+addBtn.addEventListener('click', () => {
+    const lines = namesInput.value.split('\n');
+    const names = lines.map(l => l.trim()).filter(l => l !== "");
+
+    if (names.length < 2) {
+        showToast("يرجى إدخال اسمين على الأقل لتفعيل العجلة.");
+        return;
+    }
+
+    players = names.map(name => ({ uid: ++uidCounter, name }));
+    eliminatedPlayers = [];
+    eliminationCounts = {};
+    names.forEach(n => { eliminationCounts[n] = 0; });
+    currentAngle = 0;
+
+    drawWheel();
+    startBtn.classList.remove('hidden');
+    showToast(`تمت إضافة ${players.length} لاعب بنجاح!`);
+});
+
+// ============================================================
+//  زر بدء الجولة
+// ============================================================
+startBtn.addEventListener('click', () => {
+    if (players.length < 2) return;
+    spinBtn.classList.remove('hidden');
+    shuffleBtn.classList.remove('hidden');
+    resetBtn.classList.remove('hidden');
+    startBtn.classList.add('hidden');
+    namesInput.classList.add('hidden');
+    addBtn.classList.add('hidden');
+});
+
+// ============================================================
+//  التدوير
+// ============================================================
+spinBtn.addEventListener('click', () => {
+    if (isSpinning || players.length < 2) return;
+    isSpinning = true;
+    spinBtn.disabled = true;
+
+    const spinAngleStart = Math.random() * 10 + 15; // سرعة ابتدائية (درجة/فريم تقريباً)
+    const spinTimeTotal = Math.random() * 2500 + 4500;
+    let spinTime = 0;
+
+    function rotateWheel() {
+        spinTime += 30;
+        if (spinTime >= spinTimeTotal) {
+            isSpinning = false;
+            spinBtn.disabled = false;
+            resolveLanding();
+        } else {
+            const progress = spinTime / spinTimeTotal;
+            const ease = spinAngleStart * (1 - progress); // تباطؤ خطي بسيط
+            currentAngle += (ease * Math.PI / 180);
+            drawWheel();
+            requestAnimationFrame(rotateWheel);
         }
-    });
-    namesInput.value = ''; updateAllUI();
-});
-
-window.deletePlayer = function(index) {
-    let removed = players.splice(index, 1)[0];
-    deadPlayers.push(removed);
-    updateAllUI();
-};
-startRoundBtn.addEventListener('click', () => {
-
-    if (players.length < 2) {
-        return alert("يجب إضافة لاعبين على الأقل قبل بدء الجولة!");
     }
-
-    roundStarted = true;
-
-    startRoundBtn.style.display = "none";
-    hostSpinBtn.style.display = "flex";
-    gameActions.style.display = "flex";
-
-});
-shuffleBtn.addEventListener('click', () => {
-    if (players.length < 2) return alert('أضف اسمين على الأقل للترتيب العشوائي!');
-    players.sort(() => Math.random() - 0.5); updateAllUI();
-});
-
-resetBtn.addEventListener('click', () => {
-    if (confirm('هل أنت متأكد من مسح جولة اللعبة؟')) {
-        resetBtn.addEventListener('click', () => {
-
-    if (confirm('هل أنت متأكد من مسح جولة اللعبة؟')) {
-
-        players = [];
-        deadPlayers = [];
-        lastWinner = "";
-        stats = {};
-        hasUsedRevive = {};
-
-        roundStarted = false;
-
-        startRoundBtn.style.display = "block";
-        hostSpinBtn.style.display = "none";
-        gameActions.style.display = "none";
-
-        updateAllUI();
-
-    }
-
-});
-    }
-});
-
-hostSpinBtn.addEventListener('click', () => {
-    if (!roundStarted) return;
-    if (players.length < 2) return alert('يجب وجود لاعبين على الأقل لتدوير العجلة!');
-    spinAngleStart = Math.random() * 10 + 10; spinTime = 0; spinTimeTotal = Math.random() * 3000 + 3000;
     rotateWheel();
 });
 
-function rotateWheel() {
-    spinTime += 30;
-    if(spinTime >= spinTimeTotal) { stopRotateWheel(); return; }
-    let spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
-    startAngle += (spinAngle * Math.PI / 180); drawRouletteWheel();
-    spinTimeout = setTimeout(rotateWheel, 30);
+// تحديد الاسم الذي يستقر عنده السهم العلوي (السهم عند زاوية 270°)
+function resolveLanding() {
+    const numSegments = players.length;
+    const segmentAngle = 360 / numSegments;
+
+    let currentAngleDeg = (currentAngle * 180 / Math.PI) % 360;
+    if (currentAngleDeg < 0) currentAngleDeg += 360;
+
+    const pointerDeg = 270; // أعلى الدائرة في نظام إحداثيات الكانفس
+    let relative = (pointerDeg - currentAngleDeg + 360) % 360;
+
+    landedIndex = Math.floor(relative / segmentAngle) % numSegments;
+    openDecisionModal();
 }
 
-function stopRotateWheel() {
-    clearTimeout(spinTimeout);
-    let degrees = startAngle * 180 / Math.PI + 90;
-    let arcd = arc * 180 / Math.PI;
-    let index = Math.floor((360 - (degrees % 360)) / arcd);
-    if (index < 0) index = players.length + index;
-    
-    let chosenOne = players[index];
-    
-    // فحص إذا طلع نفس الشخص مرتين ورا بعض ومعه محاولة إنقاذ
-    if (chosenOne === lastWinner && deadPlayers.length > 0 && !hasUsedRevive[chosenOne]) {
-        openReviveModal(chosenOne);
+// ============================================================
+//  فتح النافذة المناسبة حسب الحالة (إقصاء عادي أو إرجاع لاعب)
+// ============================================================
+function openDecisionModal() {
+    const landedName = players[landedIndex].name;
+    const duplicateCount = players.filter(p => p.name === landedName).length;
+
+    if (duplicateCount >= 2) {
+        openReentryModal();
     } else {
-        lastWinner = chosenOne;
-        openTribesModal(chosenOne);
+        openEliminationModal();
     }
 }
 
-// تشغيل نظام القبائل الغامض للإقصاء
-function openTribesModal(picker) {
-    document.getElementById('picker-announcement').textContent = `اللاعب [ ${picker} ] هو من سيقوم بالإقصاء الآن!`;
-    const grid = document.getElementById('tribes-grid');
-    grid.innerHTML = '';
-
-    // تصفية الأسماء الأخرى غير اللاعب الحالي لمنع إقصاء نفسه
-    let targets = players.filter(p => p !== picker);
-    // خلط الأهداف عشوائياً
-    targets.sort(() => Math.random() - 0.5);
-    // جلب قبائل عشوائية بعدد الأهداف
-    let shuffledTribes = [...SaudiTribesList].sort(() => Math.random() - 0.5).slice(0, targets.length);
-
-    shuffledTribes.forEach((tribe, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'tribe-btn';
-        btn.textContent = `قبيلة ${tribe}`;
-        btn.onclick = () => {
-            let victim = targets[i];
-            alert(`تم غدر وإقصاء اللاعب المختبئ خلف القبيلة وهو: ${victim} 🏴‍☠️`);
-            
-            // تسجيل الإقصاء لصالح الهداف
-            stats[picker] = (stats[picker] || 0) + 1;
-            
-            // نقل الضحية للمقصيين
-            players = players.filter(p => p !== victim);
-            deadPlayers.push(victim);
-            
-            document.getElementById('tribes-modal').style.display = 'none';
-            updateAllUI();
-        };
-        grid.appendChild(btn);
-    });
-    document.getElementById('tribes-modal').style.display = 'flex';
+function randomTribeCards(count) {
+    const shuffled = [...saudiTribes].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
 }
 
-// نظام الإنقاذ والرجعة
-function openReviveModal(picker) {
-    const listDiv = document.getElementById('revive-list');
-    listDiv.innerHTML = '';
-    deadPlayers.forEach(p => {
-        const btn = document.createElement('button');
-        btn.className = 'tribe-btn';
-        btn.style.borderColor = '#00ff7f';
-        btn.textContent = p;
-        btn.onclick = () => {
-            // إرجاع اللاعب
-            deadPlayers = deadPlayers.filter(d => d !== p);
-            players.push(p);
-            hasUsedRevive[picker] = true; // استهلاك المحاولة
-            lastWinner = ""; // تصفير التكرار لمنع اللانهائية
-            document.getElementById('revive-modal').style.display = 'none';
-            alert(`تم إنقاذ اللاعب ${p} وعودته للروليت! 🎉`);
-            updateAllUI();
-        };
-        listDiv.appendChild(btn);
+// -------- النافذة القياسية (إقصاء) --------
+function openEliminationModal() {
+    modalTitle.textContent = "اختر قبيلة";
+    modalSubtitle.textContent = "اختر إحدى القبائل لكشف مصير اللاعب المختار";
+    tribesContainer.innerHTML = "";
+
+    randomTribeCards(6).forEach(tribe => {
+        const card = document.createElement('div');
+        card.classList.add('tribe-card');
+        card.textContent = `قبيلة: ${tribe}`;
+        card.addEventListener('click', handleEliminationChoice, { once: true });
+        tribesContainer.appendChild(card);
     });
-    document.getElementById('revive-modal').style.display = 'flex';
+
+    modal.style.display = 'flex';
 }
 
-window.closeReviveModal = function() {
-    document.getElementById('revive-modal').style.display = 'none';
-    lastWinner = ""; // تصفير لتفادي قفل اللعبة
-};
+function handleEliminationChoice() {
+    modal.style.display = 'none';
+    const pName = players[landedIndex].name;
 
-// فحص نهاية اللعبة وإعلان التتويج والملك
-function checkGameOver() {
-    if (players.length === 1 && deadPlayers.length > 0) {
-        let finalWinner = players[0];
-        document.getElementById('final-winner-name').textContent = finalWinner;
-        
-        // حساب صاحب أعلى إقصاءات
-        let topKiller = "-";
-        let maxKills = -1;
-        for (let p in stats) {
-            if (stats[p] > maxKills) {
-                maxKills = stats[p];
-                topKiller = p;
-            }
+    const eliminationChance = Math.floor(Math.random() * 5); // 0..4
+    if (eliminationChance !== 0) {
+        // نجاح الإقصاء (4 من 5 = 80%)
+        players.splice(landedIndex, 1);
+        eliminatedPlayers.push({ name: pName });
+        eliminationCounts[pName] = (eliminationCounts[pName] || 0) + 1;
+        triggerEffect(`تم إقصاء اللاعب ❌<br>[ ${pName} ]`, 'sad-effect');
+    } else {
+        // فشل الإقصاء (1 من 5 = 20%) - يبقى مخفياً في العجلة
+        triggerEffect(`إقصاء فاشل! 😎<br>نجا اللاعب المستهدف خلف القبيلة!`, 'joy-effect');
+    }
+
+    afterDecision();
+}
+
+// -------- نافذة الإرجاع (عند اسم مكرر) --------
+function openReentryModal() {
+    modalTitle.textContent = "فرصة إرجاع لاعب!";
+
+    // هذا الاسم تكرر على العجلة - نستهلك هذا الموضع كـ "بطاقة حظ" لإرجاع مقصي سابقاً
+    if (eliminatedPlayers.length === 0) {
+        modalSubtitle.textContent = "";
+        showToast("لا يوجد لاعبين مقصيين لإرجاعهم حالياً");
+        players.splice(landedIndex, 1); // استهلاك الموضع المكرر
+        finishRoundOrDraw();
+        return;
+    }
+
+    modalSubtitle.textContent = "اختر قبيلة لمحاولة إرجاع لاعب مقصي بشكل عشوائي";
+    tribesContainer.innerHTML = "";
+
+    const tribeLabels = randomTribeCards(eliminatedPlayers.length);
+    eliminatedPlayers.forEach((elim, idx) => {
+        const card = document.createElement('div');
+        card.classList.add('tribe-card');
+        card.textContent = `قبيلة: ${tribeLabels[idx] || ('#' + (idx + 1))}`;
+        card.addEventListener('click', () => handleReentryChoice(idx), { once: true });
+        tribesContainer.appendChild(card);
+    });
+
+    modal.style.display = 'flex';
+}
+
+function handleReentryChoice(chosenIdx) {
+    modal.style.display = 'none';
+
+    // استهلاك الموضع المكرر الذي أدى لهذه الفرصة
+    players.splice(landedIndex, 1);
+
+    // احتمال 1 من 3 لنجاح الإرجاع
+    const outcome = Math.floor(Math.random() * 3); // 0..2
+    if (outcome === 0) {
+        const [returned] = eliminatedPlayers.splice(chosenIdx, 1);
+        players.push({ uid: ++uidCounter, name: returned.name });
+        triggerEffect(`إرجاع ناجح! 🥳<br>عاد اللاعب [ ${returned.name} ] إلى اللعبة`, 'joy-effect');
+    } else {
+        triggerEffect(`لم يعد أحد! 🙃<br>حظ أوفر في المرة القادمة`, 'joy-effect');
+    }
+
+    afterDecision();
+}
+
+// ============================================================
+//  بعد كل قرار: تحديث العجلة أو إعلان الفائز
+// ============================================================
+function afterDecision() {
+    setTimeout(finishRoundOrDraw, 3000);
+}
+
+function finishRoundOrDraw() {
+    if (players.length <= 1) {
+        showFinalWinner();
+    } else {
+        drawWheel();
+    }
+}
+
+// ============================================================
+//  التأثيرات (فرح / حزن) لمدة 3 ثوانٍ
+// ============================================================
+function triggerEffect(htmlText, className) {
+    effectContent.innerHTML = htmlText;
+    effectContent.className = `effect-content ${className}`;
+    effectOverlay.style.display = 'flex';
+
+    setTimeout(() => {
+        effectOverlay.style.display = 'none';
+    }, 3000);
+}
+
+// ============================================================
+//  إعلان الفائز النهائي
+// ============================================================
+function showFinalWinner() {
+    const winner = players[0] ? players[0].name : "لا أحد";
+
+    // إيجاد صاحب أكبر عدد إقصاءات من بين كل الأسماء التي دخلت اللعبة
+    let topEliminator = null;
+    let topCount = 0;
+    Object.entries(eliminationCounts).forEach(([name, count]) => {
+        if (count > topCount) {
+            topCount = count;
+            topEliminator = name;
         }
-        
-        document.getElementById('top-killer-name').textContent = maxKills > 0 ? `${topKiller} بـ (${maxKills}) غدرات!` : "لا يوجد غدرات في هذه الجولة!";
-        document.getElementById('winner-modal').style.display = 'flex';
-    }
+    });
+
+    winnerNameEl.textContent = `الفائز: ${winner}`;
+    winnerEliminatorEl.textContent = topEliminator
+        ? `صاحب أكثر إقصاءات: ${topEliminator} (${topCount})`
+        : `لم تُسجَّل أي عمليات إقصاء`;
+
+    spinBtn.classList.add('hidden');
+    winnerOverlay.style.display = 'flex';
 }
 
-// كود رفع وعرض الصورة المخصصة في المساحة الفارغة
-document.getElementById('image-uploader').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const container = document.getElementById('preview-container');
-            container.innerHTML = `<img src="${event.target.result}" alt="شعار البث المخصص">`;
-        };
-        reader.readAsDataURL(file);
-    }
+// ============================================================
+//  إعادة الترتيب العشوائي
+// ============================================================
+shuffleBtn.addEventListener('click', () => {
+    if (isSpinning) return;
+    players.sort(() => Math.random() - 0.5);
+    drawWheel();
+    showToast("تم إعادة ترتيب اللاعبين عشوائياً");
 });
 
-function easeOut(t, b, c, d) { let ts = (t /= d) * t; let tc = ts * t; return b + c * (tc + -3 * ts + 3 * t); }
-hostSpinBtn.style.display = "none";
-gameActions.style.display = "none";
+// ============================================================
+//  إعادة التعيين الكاملة
+// ============================================================
+function resetGame() {
+    players = [];
+    eliminatedPlayers = [];
+    eliminationCounts = {};
+    currentAngle = 0;
+    isSpinning = false;
+    landedIndex = null;
 
-updateAllUI();
+    drawEmptyWheel();
+    updatePlayerCount();
+    namesInput.value = "";
+
+    namesInput.classList.remove('hidden');
+    addBtn.classList.remove('hidden');
+    startBtn.classList.add('hidden');
+    spinBtn.classList.add('hidden');
+    shuffleBtn.classList.add('hidden');
+    resetBtn.classList.add('hidden');
+
+    winnerOverlay.style.display = 'none';
+    effectOverlay.style.display = 'none';
+    modal.style.display = 'none';
+}
+
+resetBtn.addEventListener('click', resetGame);
+playAgainBtn.addEventListener('click', resetGame);
