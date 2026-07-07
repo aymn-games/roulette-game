@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لعبة روليت القبائل الاحترافية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,6 +26,12 @@
 
     <!-- طبقة الإيموجي العائم (فرح / حزن) -->
     <div class="emoji-float-layer" id="emoji-float-layer"></div>
+
+    <!-- طبقة فقاعات الاحتفال بالفائز -->
+    <div class="bubbles-layer" id="bubbles-layer"></div>
+
+    <!-- ملف صوت الاحتفال بالفائز النهائي -->
+    <audio id="winner-sound" src="assets/videos/Sound.mp4" preload="auto"></audio>
 
     <!-- الشعار العائم -->
     <img src="logo.png" alt="شعار اللعبة" class="floating-logo" id="floating-logo">

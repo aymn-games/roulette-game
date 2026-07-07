@@ -333,6 +333,46 @@ body {
     color: rgba(128, 212, 255, 0.55);
 }
 
+/* اسم الستريمر داخل العنوان - خط مميز يفصله بصرياً عن العنوان الرئيسي */
+.streamer-name-highlight {
+    font-family: 'Audiowide', 'Segoe UI', cursive;
+    color: #ff2ee6;
+    text-shadow: 0 0 12px #ff2ee6, 0 0 22px #b300ff, 0 0 4px #fff;
+    letter-spacing: 1px;
+}
+
+/* ============================================================
+   طبقة فقاعات الاحتفال بالفائز
+   ============================================================ */
+.bubbles-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 210;
+    overflow: hidden;
+}
+
+.celebration-bubble {
+    position: absolute;
+    bottom: -60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), rgba(128,212,255,0.35) 45%, rgba(179,0,255,0.25) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 10px rgba(128, 212, 255, 0.6), inset 0 0 8px rgba(255,255,255,0.5);
+    animation-name: bubbleRise;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+}
+
+@keyframes bubbleRise {
+    0%   { transform: translateX(0) translateY(0) scale(0.6); opacity: 0; }
+    10%  { opacity: 0.9; }
+    100% { transform: translateX(var(--bubble-drift, 0px)) translateY(-115vh) scale(1); opacity: 0; }
+}
+
 /* ============================================================
    طبقة العجلة القابلة للسحب - تظهر في منتصف الشاشة أسفل الترويسة
    مباشرة، وتتحول إلى تموضع "fixed" بالبكسل فور أول عملية سحب حتى

@@ -21,6 +21,7 @@ let currentAngle = 0;      // بالراديان
 let isSpinning = false;
 let landedIndex = null;    // الفهرس الذي توقفت عنده العجلة في هذه الجولة
 let lastLandedName = null; // اسم آخر لاعب هبطت عليه العجلة (لمقارنة التتالي)
+let gameStarted = false;   // هل بدأت الجولة فعلياً؟ يتحكم بسلوك زر "إضافة اللاعبين"
 
 // خلط حقيقي وعادل إحصائياً (خوارزمية Fisher-Yates) - يُستخدم في كل مكان
 // نحتاج فيه لعشوائية احترافية بدل sort(() => 0.5 - Math.random()) المتحيّزة
@@ -134,15 +135,27 @@ if (wheelScaleSlider && wheelWrapper) {
 }
 
 // ============================================================
-//  اسم الستريمر - يُضاف تلقائياً إلى عنوان اللعبة عند كتابته
+//  اسم الستريمر - يُضاف تلقائياً إلى عنوان اللعبة عند كتابته، بخط
+//  مميز (Audiowide) يفصله بصرياً عن نص العنوان الرئيسي
 // ============================================================
+function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+function updateGameTitle() {
+    if (!gameTitleEl || !streamerNameInput) return;
+    const streamerName = streamerNameInput.value.trim();
+    if (streamerName) {
+        gameTitleEl.innerHTML = `روليت القبائل مع <span class="streamer-name-highlight">${escapeHtml(streamerName)}</span>`;
+    } else {
+        gameTitleEl.textContent = 'روليت القبائل';
+    }
+}
+
 if (streamerNameInput && gameTitleEl) {
-    streamerNameInput.addEventListener('input', () => {
-        const streamerName = streamerNameInput.value.trim();
-        gameTitleEl.textContent = streamerName
-            ? `روليت القبائل مع ${streamerName}`
-            : 'روليت القبائل';
-    });
+    streamerNameInput.addEventListener('input', updateGameTitle);
 }
 
 // ============================================================
@@ -211,6 +224,52 @@ if (wheelDragLayer) {
         moveWheelDrag(touch.clientX, touch.clientY);
     }, { passive: true });
     window.addEventListener('touchend', endWheelDrag);
+}
+
+// ============================================================
+//  فقاعات الاحتفال بالفائز النهائي (Bubbles Celebration Effect)
+//  تنطلق دفعة أولى فورية ثم تستمر بالتدفق دورياً طوال ظهور نافذة
+//  الفائز، وتُنظَّف بالكامل بمجرد إغلاق النافذة
+// ============================================================
+const bubblesLayer = document.getElementById('bubbles-layer');
+const winnerSound = document.getElementById('winner-sound');
+let bubblesIntervalId = null;
+
+function spawnBubble() {
+    if (!bubblesLayer) return;
+    const bubble = document.createElement('div');
+    bubble.className = 'celebration-bubble';
+    const size = Math.random() * 34 + 14;
+    bubble.style.width = size + 'px';
+    bubble.style.height = size + 'px';
+    bubble.style.left = (Math.random() * 100) + 'vw';
+    bubble.style.setProperty('--bubble-drift', (Math.random() * 160 - 80) + 'px');
+    bubble.style.animationDuration = (Math.random() * 3 + 4) + 's';
+    bubble.style.animationDelay = (Math.random() * 0.4) + 's';
+    bubblesLayer.appendChild(bubble);
+    setTimeout(() => bubble.remove(), 7600);
+}
+
+function startBubblesCelebration() {
+    if (!bubblesLayer || bubblesIntervalId) return;
+    for (let i = 0; i < 18; i++) spawnBubble(); // دفعة أولى فورية تملأ الشاشة مباشرة
+    bubblesIntervalId = setInterval(spawnBubble, 220);
+}
+
+function stopBubblesCelebration() {
+    clearInterval(bubblesIntervalId);
+    bubblesIntervalId = null;
+    if (bubblesLayer) bubblesLayer.innerHTML = "";
+}
+
+// تشغيل ملف صوت الاحتفال المخصص عند إعلان الفائز النهائي
+function playWinnerSoundFile() {
+    if (!winnerSound || masterVolume <= 0) return;
+    try {
+        winnerSound.currentTime = 0;
+        winnerSound.volume = masterVolume;
+        winnerSound.play().catch(() => { /* بعض المتصفحات تمنع التشغيل التلقائي قبل أي تفاعل */ });
+    } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
 }
 
 // ============================================================
@@ -324,6 +383,7 @@ if (volumeSlider) {
     volumeSlider.addEventListener('input', () => {
         masterVolume = Number(volumeSlider.value) / 100;
         updateVolumeIcon();
+        if (winnerSound) winnerSound.volume = masterVolume;
     });
     updateVolumeIcon();
 }
@@ -429,22 +489,43 @@ addBtn.addEventListener('click', () => {
     const lines = namesInput.value.split('\n');
     const names = lines.map(l => l.trim()).filter(l => l !== "");
 
-    if (names.length < 2) {
-        showToast("يرجى إدخال اسمين على الأقل لتفعيل العجلة.");
+    if (!gameStarted) {
+        // ----- قبل بدء الجولة: نبني قائمة اللاعبين من الصفر كالمعتاد -----
+        if (names.length < 2) {
+            showToast("يرجى إدخال اسمين على الأقل لتفعيل العجلة.");
+            return;
+        }
+
+        players = names.map(name => ({ uid: ++uidCounter, name }));
+        eliminatedPlayers = [];
+        eliminationCounts = {};
+        reentryUsed = {};
+        lastLandedName = null;
+        names.forEach(n => { eliminationCounts[n] = 0; });
+        currentAngle = 0;
+
+        drawWheel();
+        startBtn.classList.remove('hidden');
+        showToast(`تمت إضافة ${players.length} لاعب بنجاح!`);
+        namesInput.value = "";
         return;
     }
 
-    players = names.map(name => ({ uid: ++uidCounter, name }));
-    eliminatedPlayers = [];
-    eliminationCounts = {};
-    reentryUsed = {};
-    lastLandedName = null;
-    names.forEach(n => { eliminationCounts[n] = 0; });
-    currentAngle = 0;
+    // ----- أثناء الجولة: نُضيف فقط الأسماء الجديدة إلى العجلة الحالية
+    //       (دفعاً/push) دون المساس بمن هم موجودون بالفعل أو بحالة اللعبة -----
+    if (names.length === 0) {
+        showToast("يرجى كتابة اسم واحد على الأقل لإضافته.");
+        return;
+    }
+
+    names.forEach(name => {
+        players.push({ uid: ++uidCounter, name });
+        if (!(name in eliminationCounts)) eliminationCounts[name] = 0;
+    });
 
     drawWheel();
-    startBtn.classList.remove('hidden');
-    showToast(`تمت إضافة ${players.length} لاعب بنجاح!`);
+    showToast(`تمت إضافة ${names.length} لاعب جديد إلى العجلة!`);
+    namesInput.value = "";
 });
 
 // ============================================================
@@ -453,11 +534,13 @@ addBtn.addEventListener('click', () => {
 // ============================================================
 startBtn.addEventListener('click', () => {
     if (players.length < 2) return;
+    gameStarted = true;
     spinBtn.classList.remove('hidden');
     shuffleBtn.classList.remove('hidden');
     resetBtn.classList.remove('hidden');
     startBtn.classList.add('hidden');
     if (leftControls) leftControls.classList.remove('hidden');
+    if (streamerNameInput) streamerNameInput.classList.add('hidden');
 
     gameSidebar.appendChild(namesInput);
     gameSidebar.appendChild(addBtn);
@@ -790,6 +873,8 @@ function showFinalWinner() {
     spinBtn.classList.add('hidden');
     winnerOverlay.style.display = 'flex';
     playVictorySound();
+    playWinnerSoundFile();
+    startBubblesCelebration();
 
     // إظهار شريط الفائز الضخم أعلى الشاشة (فوق لوحة اللاعبين) - مثالي للبث المباشر
     if (winnerBanner && winnerBannerNameEl) {
@@ -820,7 +905,13 @@ function resetGame() {
     currentAngle = 0;
     isSpinning = false;
     landedIndex = null;
+    gameStarted = false;
     stopSpinTicks();
+    stopBubblesCelebration();
+    if (winnerSound) {
+        winnerSound.pause();
+        winnerSound.currentTime = 0;
+    }
 
     drawEmptyWheel();
     updatePlayerCount();
@@ -831,6 +922,7 @@ function resetGame() {
     addBtnHomeParent.insertBefore(addBtn, addBtnHomeNext);
     gameSidebar.classList.add('hidden');
     if (leftControls) leftControls.classList.add('hidden');
+    if (streamerNameInput) streamerNameInput.classList.remove('hidden');
 
     namesInput.classList.remove('hidden');
     addBtn.classList.remove('hidden');
