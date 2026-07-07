@@ -309,6 +309,22 @@ body {
     max-width: 90vw;
 }
 
+/* حاوية حقل اسم الستريمر + زر الإغلاق (X)
+   نُخفي هذه الحاوية بالشفافية (opacity) فقط بدل display:none، حتى تبقى
+   مساحتها محجوزة داخل .top-header ولا يتحرك العنوان أو أي عنصر آخر
+   في الصفحة عند إخفائها */
+.streamer-name-wrapper {
+    position: relative;
+    display: inline-flex;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.streamer-name-wrapper.dismissed {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px) scale(0.97);
+}
+
 .streamer-name-input {
     background: rgba(15, 5, 30, 0.85);
     border: 2px solid #b300ff;
@@ -331,6 +347,36 @@ body {
 
 .streamer-name-input::placeholder {
     color: rgba(128, 212, 255, 0.55);
+}
+
+/* زر الإغلاق (X) العائم بأعلى-يمين حقل اسم الستريمر، بلمسة نيون
+   بنفسجي/وردي متناسقة مع هوية الحاوية */
+.streamer-name-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 5, 35, 0.9);
+    border: 1px solid #ff2ee6;
+    border-radius: 50%;
+    color: #ff2ee6;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 0 8px #ff2ee6, 0 0 4px #b300ff;
+    transition: box-shadow 0.25s ease, transform 0.2s ease, color 0.25s ease;
+    z-index: 2;
+}
+
+.streamer-name-close:hover {
+    box-shadow: 0 0 14px #ff2ee6, 0 0 9px #b300ff;
+    transform: scale(1.15);
+    color: #fff;
 }
 
 /* اسم الستريمر داخل العنوان - خط مميز يفصله بصرياً عن العنوان الرئيسي */

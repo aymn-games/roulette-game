@@ -30,9 +30,6 @@
     <!-- طبقة فقاعات الاحتفال بالفائز -->
     <div class="bubbles-layer" id="bubbles-layer"></div>
 
-    <!-- ملف صوت الاحتفال بالفائز النهائي -->
-    <audio id="winner-sound" src="assets/videos/Sound.mp4" preload="auto"></audio>
-
     <!-- الشعار العائم -->
     <img src="logo.png" alt="شعار اللعبة" class="floating-logo" id="floating-logo">
 
@@ -45,13 +42,16 @@
     <!-- الترويسة العلوية: عنوان اللعبة + اسم الستريمر -->
     <header class="top-header" id="top-header">
         <h1 class="game-title" id="game-title">روليت القبائل</h1>
-        <input
-            type="text"
-            id="streamer-name-input"
-            class="streamer-name-input"
-            placeholder="اسم الستريمر (اختياري)"
-            maxlength="24"
-            aria-label="اسم الستريمر">
+        <div class="streamer-name-wrapper" id="streamer-name-wrapper">
+            <input
+                type="text"
+                id="streamer-name-input"
+                class="streamer-name-input"
+                placeholder="اسم الستريمر (اختياري)"
+                maxlength="24"
+                aria-label="اسم الستريمر">
+            <button type="button" id="streamer-name-close" class="streamer-name-close" aria-label="إغلاق">&times;</button>
+        </div>
     </header>
 
     <!-- طبقة العجلة القابلة للسحب - تظهر في منتصف الشاشة أسفل العنوان مباشرة،

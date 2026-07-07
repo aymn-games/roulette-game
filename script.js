@@ -67,6 +67,8 @@ const wheelDragLayer = document.getElementById('wheel-drag-layer');
 const leftControls = document.getElementById('left-controls');
 const gameTitleEl = document.getElementById('game-title');
 const streamerNameInput = document.getElementById('streamer-name-input');
+const streamerNameWrapper = document.getElementById('streamer-name-wrapper');
+const streamerNameCloseBtn = document.getElementById('streamer-name-close');
 const modalChooserNameEl = document.getElementById('modal-chooser-name');
 
 // نحفظ الموضع الأصلي لحقل الأسماء وزر الإضافة حتى نستطيع إعادتهما بعد إعادة التعيين
@@ -159,6 +161,33 @@ if (streamerNameInput && gameTitleEl) {
 }
 
 // ============================================================
+//  إغلاق حقل اسم الستريمر (زر X أو الضغط على Enter بعد الكتابة)
+//  نستخدم الشفافية (opacity) بدل display:none حتى لا يتحرك أي
+//  عنصر آخر في الترويسة (العنوان / العجلة / حقل الأسماء) عند الإخفاء
+// ============================================================
+function dismissStreamerNameInput() {
+    if (streamerNameWrapper) streamerNameWrapper.classList.add('dismissed');
+}
+
+function restoreStreamerNameInput() {
+    if (streamerNameWrapper) streamerNameWrapper.classList.remove('dismissed');
+}
+
+if (streamerNameCloseBtn) {
+    streamerNameCloseBtn.addEventListener('click', dismissStreamerNameInput);
+}
+
+if (streamerNameInput) {
+    streamerNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            dismissStreamerNameInput();
+            streamerNameInput.blur();
+        }
+    });
+}
+
+// ============================================================
 //  سحب العجلة لأي مكان في الشاشة (Draggable Wheel)
 //  تبقى العجلة في تموضعها الطبيعي في المنتصف أسفل العنوان حتى أول
 //  عملية سحب، وعندها فقط تتحول إلى تموضع "fixed" بالبكسل الحالي
@@ -232,7 +261,6 @@ if (wheelDragLayer) {
 //  الفائز، وتُنظَّف بالكامل بمجرد إغلاق النافذة
 // ============================================================
 const bubblesLayer = document.getElementById('bubbles-layer');
-const winnerSound = document.getElementById('winner-sound');
 let bubblesIntervalId = null;
 
 function spawnBubble() {
@@ -262,13 +290,16 @@ function stopBubblesCelebration() {
     if (bubblesLayer) bubblesLayer.innerHTML = "";
 }
 
-// تشغيل ملف صوت الاحتفال المخصص عند إعلان الفائز النهائي
+// تشغيل ملف صوت الاحتفال المخصص (Sound.mp3) عند إعلان الفائز النهائي
+// نُنشئ كائن Audio جديداً في كل مرة بدل الاعتماد على عنصر <audio> ثابت في
+// الصفحة، لأن الاستدعاء يحدث دائماً بعد تفاعل الستريمر مع زر التدوير، ما
+// يتجاوز قيود التشغيل التلقائي في المتصفحات
 function playWinnerSoundFile() {
-    if (!winnerSound || masterVolume <= 0) return;
+    if (masterVolume <= 0) return;
     try {
-        winnerSound.currentTime = 0;
-        winnerSound.volume = masterVolume;
-        winnerSound.play().catch(() => { /* بعض المتصفحات تمنع التشغيل التلقائي قبل أي تفاعل */ });
+        const sound = new Audio('assets/videos/Sound.mp3');
+        sound.volume = masterVolume;
+        sound.play().catch(() => { /* بعض المتصفحات تمنع التشغيل التلقائي قبل أي تفاعل */ });
     } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
 }
 
@@ -383,7 +414,6 @@ if (volumeSlider) {
     volumeSlider.addEventListener('input', () => {
         masterVolume = Number(volumeSlider.value) / 100;
         updateVolumeIcon();
-        if (winnerSound) winnerSound.volume = masterVolume;
     });
     updateVolumeIcon();
 }
@@ -540,7 +570,7 @@ startBtn.addEventListener('click', () => {
     resetBtn.classList.remove('hidden');
     startBtn.classList.add('hidden');
     if (leftControls) leftControls.classList.remove('hidden');
-    if (streamerNameInput) streamerNameInput.classList.add('hidden');
+    dismissStreamerNameInput();
 
     gameSidebar.appendChild(namesInput);
     gameSidebar.appendChild(addBtn);
@@ -908,10 +938,6 @@ function resetGame() {
     gameStarted = false;
     stopSpinTicks();
     stopBubblesCelebration();
-    if (winnerSound) {
-        winnerSound.pause();
-        winnerSound.currentTime = 0;
-    }
 
     drawEmptyWheel();
     updatePlayerCount();
@@ -922,7 +948,7 @@ function resetGame() {
     addBtnHomeParent.insertBefore(addBtn, addBtnHomeNext);
     gameSidebar.classList.add('hidden');
     if (leftControls) leftControls.classList.add('hidden');
-    if (streamerNameInput) streamerNameInput.classList.remove('hidden');
+    restoreStreamerNameInput();
 
     namesInput.classList.remove('hidden');
     addBtn.classList.remove('hidden');
