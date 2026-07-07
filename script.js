@@ -56,6 +56,17 @@ const playAgainBtn = document.getElementById('play-again-btn');
 const playerCountEl = document.getElementById('player-count');
 const toastEl = document.getElementById('toast');
 const gameSidebar = document.getElementById('game-sidebar');
+const introOverlay = document.getElementById('intro-overlay');
+const introTitle = document.getElementById('intro-title');
+const winnerBanner = document.getElementById('winner-banner');
+const winnerBannerNameEl = document.getElementById('winner-banner-name');
+const wheelWrapper = document.querySelector('.wheel-wrapper');
+const wheelScaleSlider = document.getElementById('wheel-scale-slider');
+const wheelDragLayer = document.getElementById('wheel-drag-layer');
+const leftControls = document.getElementById('left-controls');
+const gameTitleEl = document.getElementById('game-title');
+const streamerNameInput = document.getElementById('streamer-name-input');
+const modalChooserNameEl = document.getElementById('modal-chooser-name');
 
 // نحفظ الموضع الأصلي لحقل الأسماء وزر الإضافة حتى نستطيع إعادتهما بعد إعادة التعيين
 const namesInputHomeParent = namesInput.parentNode;
@@ -82,6 +93,125 @@ function createParticles() {
     }
 }
 createParticles();
+
+// ============================================================
+//  شاشة الافتتاح الاحترافية (Blurred Intro Screen)
+//  تظهر عند فتح الرابط، يتلاشى العنوان إلى الظهور في المنتصف، ثم
+//  يختفي كل شيء (النص + طبقة الضبابية) بسلاسة بعد 2-3 ثوانٍ
+// ============================================================
+(function initIntroScreen() {
+    if (!introOverlay || !introTitle) return;
+
+    // نضيف كلاس الظهور في الإطار التالي حتى يعمل الانتقال (transition) بشكل صحيح
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            introTitle.classList.add('show');
+        });
+    });
+
+    // بعد 2.4 ثانية من العرض نبدأ بتلاشي الضبابية والعنوان معاً
+    setTimeout(() => {
+        introOverlay.classList.add('fade-out');
+        introTitle.classList.remove('show');
+        // نزيل الطبقة كلياً من تدفق الصفحة بعد اكتمال الانتقال (1 ثانية)
+        setTimeout(() => {
+            introOverlay.style.display = 'none';
+        }, 1050);
+    }, 2400);
+})();
+
+// ============================================================
+//  متحكم تكبير/تصغير العجلة المباشر
+//  يعمل في أي وقت (قبل وبعد بدء الجولة وحتى أثناء الدوران) لأنه
+//  يغيّر فقط تحويل CSS (scale) على الحاوية الخارجية للعجلة، دون
+//  المساس بمنطق الرسم الداخلي على الـ canvas
+// ============================================================
+if (wheelScaleSlider && wheelWrapper) {
+    wheelScaleSlider.addEventListener('input', () => {
+        const scale = Number(wheelScaleSlider.value) / 100;
+        wheelWrapper.style.transform = `scale(${scale})`;
+    });
+}
+
+// ============================================================
+//  اسم الستريمر - يُضاف تلقائياً إلى عنوان اللعبة عند كتابته
+// ============================================================
+if (streamerNameInput && gameTitleEl) {
+    streamerNameInput.addEventListener('input', () => {
+        const streamerName = streamerNameInput.value.trim();
+        gameTitleEl.textContent = streamerName
+            ? `روليت القبائل مع ${streamerName}`
+            : 'روليت القبائل';
+    });
+}
+
+// ============================================================
+//  سحب العجلة لأي مكان في الشاشة (Draggable Wheel)
+//  تبقى العجلة في تموضعها الطبيعي في المنتصف أسفل العنوان حتى أول
+//  عملية سحب، وعندها فقط تتحول إلى تموضع "fixed" بالبكسل الحالي
+//  دون أي قفزة بصرية، ليتمكن الستريمر من وضعها أينما يناسب بثه
+// ============================================================
+if (wheelDragLayer) {
+    let isDraggingWheel = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragOriginLeft = 0;
+    let dragOriginTop = 0;
+
+    function beginWheelDrag(clientX, clientY, targetEl) {
+        // لا نبدأ السحب إذا كان النقر على زر التدوير نفسه، حتى يستمر بعمله بشكل طبيعي
+        if (targetEl === spinBtn) return;
+
+        if (!wheelDragLayer.classList.contains('is-fixed')) {
+            const rect = wheelDragLayer.getBoundingClientRect();
+            wheelDragLayer.style.position = 'fixed';
+            wheelDragLayer.style.left = rect.left + 'px';
+            wheelDragLayer.style.top = rect.top + 'px';
+            wheelDragLayer.style.margin = '0';
+            wheelDragLayer.classList.add('is-fixed');
+        }
+
+        const currentRect = wheelDragLayer.getBoundingClientRect();
+        dragOriginLeft = currentRect.left;
+        dragOriginTop = currentRect.top;
+        dragStartX = clientX;
+        dragStartY = clientY;
+        isDraggingWheel = true;
+        wheelDragLayer.classList.add('dragging');
+    }
+
+    function moveWheelDrag(clientX, clientY) {
+        if (!isDraggingWheel) return;
+        const deltaX = clientX - dragStartX;
+        const deltaY = clientY - dragStartY;
+        wheelDragLayer.style.left = (dragOriginLeft + deltaX) + 'px';
+        wheelDragLayer.style.top = (dragOriginTop + deltaY) + 'px';
+    }
+
+    function endWheelDrag() {
+        isDraggingWheel = false;
+        wheelDragLayer.classList.remove('dragging');
+    }
+
+    // أحداث الفأرة (سطح المكتب)
+    wheelDragLayer.addEventListener('mousedown', (e) => {
+        beginWheelDrag(e.clientX, e.clientY, e.target);
+    });
+    window.addEventListener('mousemove', (e) => moveWheelDrag(e.clientX, e.clientY));
+    window.addEventListener('mouseup', endWheelDrag);
+
+    // أحداث اللمس (الجوال / التابلت)
+    wheelDragLayer.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        beginWheelDrag(touch.clientX, touch.clientY, e.target);
+    }, { passive: true });
+    window.addEventListener('touchmove', (e) => {
+        if (!isDraggingWheel) return;
+        const touch = e.touches[0];
+        moveWheelDrag(touch.clientX, touch.clientY);
+    }, { passive: true });
+    window.addEventListener('touchend', endWheelDrag);
+}
 
 // ============================================================
 //  تأثير الإيموجي العائم (فرح / حزن) لمدة 3 ثوانٍ
@@ -327,6 +457,7 @@ startBtn.addEventListener('click', () => {
     shuffleBtn.classList.remove('hidden');
     resetBtn.classList.remove('hidden');
     startBtn.classList.add('hidden');
+    if (leftControls) leftControls.classList.remove('hidden');
 
     gameSidebar.appendChild(namesInput);
     gameSidebar.appendChild(addBtn);
@@ -463,6 +594,7 @@ function randomTribeCards(count) {
 function openEliminationModal() {
     const chooserName = players[landedIndex].name;
 
+    if (modalChooserNameEl) modalChooserNameEl.textContent = chooserName;
     modalTitle.textContent = "اختر قبيلة";
     modalSubtitle.textContent = `${chooserName} يختار قبيلة لتحديد من سيتم استهدافه من بقية اللاعبين`;
     tribesContainer.innerHTML = "";
@@ -529,6 +661,9 @@ function handleEliminationChoice(targetUid) {
 // متتاليتين. أسماء اللاعبين المقصيين تبقى مخفية تماماً خلف أسماء القبائل،
 // ويُسمح لكل لاعب مقصي بالعودة مرة واحدة فقط طوال اللعبة (عبر reentryUsed)
 function openReentryModal() {
+    const chooserName = players[landedIndex].name;
+
+    if (modalChooserNameEl) modalChooserNameEl.textContent = chooserName;
     modalTitle.textContent = "فرصة إرجاع لاعب! (هبطت العجلة على نفس الاسم مرتين متتاليتين)";
     modalActions.innerHTML = "";
 
@@ -540,6 +675,7 @@ function openReentryModal() {
     if (eligibleIndices.length === 0) {
         modalSubtitle.textContent = "";
         tribesContainer.innerHTML = "";
+        if (modalChooserNameEl) modalChooserNameEl.textContent = "";
         showToast("لا يوجد لاعبين مؤهلين للإرجاع حالياً");
         finishRoundOrDraw();
         return;
@@ -654,6 +790,12 @@ function showFinalWinner() {
     spinBtn.classList.add('hidden');
     winnerOverlay.style.display = 'flex';
     playVictorySound();
+
+    // إظهار شريط الفائز الضخم أعلى الشاشة (فوق لوحة اللاعبين) - مثالي للبث المباشر
+    if (winnerBanner && winnerBannerNameEl) {
+        winnerBannerNameEl.textContent = winner;
+        winnerBanner.classList.add('show');
+    }
 }
 
 // ============================================================
@@ -688,6 +830,7 @@ function resetGame() {
     namesInputHomeParent.insertBefore(namesInput, namesInputHomeNext);
     addBtnHomeParent.insertBefore(addBtn, addBtnHomeNext);
     gameSidebar.classList.add('hidden');
+    if (leftControls) leftControls.classList.add('hidden');
 
     namesInput.classList.remove('hidden');
     addBtn.classList.remove('hidden');
@@ -700,6 +843,13 @@ function resetGame() {
     effectOverlay.style.display = 'none';
     modal.style.display = 'none';
     modalActions.innerHTML = "";
+    if (modalChooserNameEl) modalChooserNameEl.textContent = "";
+
+    // إخفاء شريط الفائز الضخم عند بدء لعبة جديدة
+    if (winnerBanner && winnerBannerNameEl) {
+        winnerBanner.classList.remove('show');
+        winnerBannerNameEl.textContent = "";
+    }
 }
 
 resetBtn.addEventListener('click', resetGame);

@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- شاشة الافتتاح الاحترافية (تظهر عند فتح الرابط ثم تتلاشى) -->
+    <div class="intro-overlay" id="intro-overlay">
+        <h1 class="intro-title" id="intro-title">روليت القبائل</h1>
+    </div>
+
+    <!-- شريط إعلان الفائز الضخم (يظهر أعلى الشاشة فوق لوحة اللاعبين) -->
+    <div class="winner-banner" id="winner-banner">
+        <span class="winner-banner-label">🏆 الفائز</span>
+        <span class="winner-banner-name" id="winner-banner-name"></span>
+    </div>
+
     <!-- الخلفية المتحركة (الجزيئات المتطايرة) -->
     <div class="particles" id="particles"></div>
 
@@ -22,27 +33,50 @@
         <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="70" aria-label="مستوى الصوت">
     </div>
 
-    <main class="game-container">
-        <!-- قسم العجلة -->
-        <section class="wheel-section">
-            <div class="wheel-wrapper">
-                <div class="arrow"></div>
-                <canvas id="wheel" width="450" height="450"></canvas>
-                <button id="spin-btn" class="hidden" aria-label="تدوير العجلة">تدوير</button>
-            </div>
-        </section>
+    <!-- الترويسة العلوية: عنوان اللعبة + اسم الستريمر -->
+    <header class="top-header" id="top-header">
+        <h1 class="game-title" id="game-title">روليت القبائل</h1>
+        <input
+            type="text"
+            id="streamer-name-input"
+            class="streamer-name-input"
+            placeholder="اسم الستريمر (اختياري)"
+            maxlength="24"
+            aria-label="اسم الستريمر">
+    </header>
 
+    <!-- طبقة العجلة القابلة للسحب - تظهر في منتصف الشاشة أسفل العنوان مباشرة،
+         ويمكن للستريمر سحبها لأي مكان يناسب تخطيط بثه المباشر -->
+    <div class="wheel-drag-layer" id="wheel-drag-layer">
+        <div class="wheel-wrapper">
+            <div class="arrow"></div>
+            <canvas id="wheel" width="450" height="450"></canvas>
+            <button id="spin-btn" class="hidden" aria-label="تدوير العجلة">تدوير</button>
+        </div>
+
+        <!-- متحكم تكبير/تصغير العجلة (يعمل حتى بعد بدء الجولة، ويتحرك مع العجلة) -->
+        <div class="wheel-scale-control" id="wheel-scale-control">
+            <span class="scale-icon">🔍</span>
+            <input type="range" id="wheel-scale-slider" class="wheel-scale-slider" min="60" max="150" value="100" aria-label="حجم العجلة">
+            <span class="scale-icon">🔎</span>
+        </div>
+    </div>
+
+    <!-- الشريط الجانبي الأيسر: أزرار إعادة الترتيب وإعادة التعيين -->
+    <aside id="left-controls" class="left-controls hidden">
+        <h3>أدوات التحكم</h3>
+        <button id="shuffle-btn" class="btn btn-secondary hidden">إعادة ترتيب عشوائي</button>
+        <button id="reset-btn" class="btn btn-danger hidden">إعادة تعيين الجميع</button>
+    </aside>
+
+    <main class="game-container">
         <!-- قسم التحكم والأسماء -->
         <section class="controls-section">
-            <h1 class="game-title">روليت القبائل</h1>
-
             <textarea id="names-input" placeholder="أدخل أسماء المشاركين هنا... (اسم واحد في كل سطر)"></textarea>
 
             <div class="buttons-group">
                 <button id="add-btn" class="btn btn-primary">إضافة اللاعبين للعجلة</button>
                 <button id="start-btn" class="btn btn-success hidden">بدء الجولة</button>
-                <button id="shuffle-btn" class="btn btn-secondary hidden">إعادة ترتيب عشوائي</button>
-                <button id="reset-btn" class="btn btn-danger hidden">إعادة تعيين الجميع</button>
             </div>
 
             <p id="player-count" class="player-count"></p>
@@ -57,6 +91,7 @@
     <!-- نافذة القبائل (إقصاء / إرجاع) -->
     <div id="modal" class="modal" role="dialog" aria-modal="true">
         <div class="modal-content">
+            <h1 id="modal-chooser-name" class="modal-chooser-name"></h1>
             <h2 id="modal-title">اختر قبيلة</h2>
             <p id="modal-subtitle" class="modal-subtitle"></p>
             <div id="tribes-container" class="tribes-grid"></div>
