@@ -17,6 +17,11 @@ let eliminationCounts = {}; // { name: عدد مرات الإقصاء }
 let reentryUsed = {};       // { name: true } - اللاعب استخدم فرصة إرجاعه الوحيدة بالفعل
 let uidCounter = 0;
 
+// القائمة الكاملة لكل الأسماء التي أضافها الستريمر (تبقى محفوظة بين الجولات
+// المتتالية ولا تُمسح إلا عند الضغط الصريح على "إعادة تعيين الجميع"، حتى
+// يمكن بدء جولة جديدة بنفس اللاعبين دون إعادة كتابة الأسماء من جديد)
+let fullRoster = []; // [name, name, ...]
+
 let currentAngle = 0;      // بالراديان
 let isSpinning = false;
 let landedIndex = null;    // الفهرس الذي توقفت عنده العجلة في هذه الجولة
@@ -70,6 +75,7 @@ const streamerNameInput = document.getElementById('streamer-name-input');
 const streamerNameWrapper = document.getElementById('streamer-name-wrapper');
 const streamerNameCloseBtn = document.getElementById('streamer-name-close');
 const modalChooserNameEl = document.getElementById('modal-chooser-name');
+const playerListItemsEl = document.getElementById('player-list-items');
 
 // نحفظ الموضع الأصلي لحقل الأسماء وزر الإضافة حتى نستطيع إعادتهما بعد إعادة التعيين
 const namesInputHomeParent = namesInput.parentNode;
@@ -290,16 +296,68 @@ function stopBubblesCelebration() {
     if (bubblesLayer) bubblesLayer.innerHTML = "";
 }
 
-// تشغيل ملف صوت الاحتفال المخصص (Sound.mp3) عند إعلان الفائز النهائي
-// نُنشئ كائن Audio جديداً في كل مرة بدل الاعتماد على عنصر <audio> ثابت في
-// الصفحة، لأن الاستدعاء يحدث دائماً بعد تفاعل الستريمر مع زر التدوير، ما
-// يتجاوز قيود التشغيل التلقائي في المتصفحات
+// ============================================================
+//  ⚠️ رابط صوت الفائز
+//  تم ضبطه هنا حسب طلبك، لكن يجب الانتباه: https://google.com هو رابط
+//  صفحة جوجل الرئيسية (HTML) وليس ملف صوت فعلي، لذا لن يُصدر أي صوت -
+//  المتصفح سيحاول تحميله كملف وسائط ويفشل فوراً (خطأ تحميل/فك ترميز).
+//  رابط Google Drive المباشر الصحيح يجب أن يكون بهذا الشكل:
+//    https://drive.google.com/uc?export=download&id=FILE_ID
+//  لكن روابط Drive نفسها غير موثوقة للبث المباشر (قد تعرض صفحة تحذير
+//  فيروسات بدل الملف مباشرة للملفات الكبيرة). الأفضل استضافة الملف على
+//  رابط "raw" مباشر مثل GitHub raw أو Dropbox (بنهاية ?dl=1) أو Cloudinary.
+// ============================================================
+const WINNER_SOUND_URL = 'https://google.com'; // 👈 كما طلبت - استبدله برابط ملف صوت حقيقي عند توفره
+
+// عنصر صوت الفائز - نُنشئه مرة واحدة فقط ونُعيد استخدامه، بدل إنشاء كائن
+// Audio جديد في كل مرة، حتى نستطيع "تهيئته" (unlock) مباشرة عند كل توقف
+// للعجلة (حدث wheel-stop) وهو استمرار مباشر لتفاعل المستخدم مع زر التدوير
+let winnerAudioEl = null;
+function getWinnerAudioEl() {
+    if (!winnerAudioEl) {
+        winnerAudioEl = new Audio(WINNER_SOUND_URL);
+        winnerAudioEl.preload = 'auto';
+    }
+    return winnerAudioEl;
+}
+
+// تُستدعى مباشرة داخل حدث توقف العجلة (resolveLanding) لتهيئة عنصر الصوت
+// بصمت (volume صفر ثم إيقاف فوري) حتى يتجاوز المتصفح قيود التشغيل التلقائي
+// عند تشغيل صوت الفائز الفعلي لاحقاً، حتى لو جاء ذلك بعد تأخير بسيط
+function primeWinnerAudio() {
+    try {
+        const el = getWinnerAudioEl();
+        const targetVolume = masterVolume;
+        el.volume = 0;
+        const playPromise = el.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+            playPromise.then(() => {
+                el.pause();
+                el.currentTime = 0;
+                el.volume = targetVolume;
+            }).catch(() => { el.volume = targetVolume; });
+        } else {
+            el.pause();
+            el.currentTime = 0;
+            el.volume = targetVolume;
+        }
+    } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
+}
+
+// تشغيل صوت الفائز الفعلي عند إعلان الفائز النهائي - يستخدم نفس عنصر
+// الصوت الذي تمت تهيئته مسبقاً عند توقف العجلة لأقصى موثوقية
 function playWinnerSoundFile() {
     if (masterVolume <= 0) return;
     try {
-        const sound = new Audio('assets/videos/Sound.mp3');
-        sound.volume = masterVolume;
-        sound.play().catch(() => { /* بعض المتصفحات تمنع التشغيل التلقائي قبل أي تفاعل */ });
+        const el = getWinnerAudioEl();
+        el.currentTime = 0;
+        el.volume = masterVolume;
+        el.play().catch((err) => {
+            // فشل التشغيل غالباً بسبب رابط غير صالح/غير متاح
+            // (راجع تعليق WINNER_SOUND_URL أعلاه) وليس بسبب سياسة التشغيل
+            // التلقائي، لأن هذا الاستدعاء يأتي دائماً بعد تفاعل المستخدم
+            console.warn('تعذر تشغيل صوت الفائز. تأكد من صحة WINNER_SOUND_URL:', err);
+        });
     } catch (e) { /* تجاهل أي خطأ صوتي حتى لا يوقف اللعبة */ }
 }
 
@@ -510,6 +568,80 @@ function updatePlayerCount() {
     playerCountEl.textContent = players.length > 0
         ? `عدد اللاعبين على العجلة: ${players.length}`
         : "";
+    renderPlayerListSidebar();
+}
+
+// ============================================================
+//  قائمة اللاعبين الحية في الشريط الجانبي الأيمن + زر حذف لكل لاعب
+// ============================================================
+function renderPlayerListSidebar() {
+    if (!playerListItemsEl) return;
+
+    // إظهار/إخفاء الشريط الجانبي تلقائياً حسب وجود لاعبين على العجلة
+    if (gameSidebar) {
+        gameSidebar.classList.toggle('hidden', players.length === 0);
+    }
+
+    playerListItemsEl.innerHTML = "";
+
+    if (players.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'player-list-empty';
+        empty.textContent = "لا يوجد لاعبون على العجلة بعد";
+        playerListItemsEl.appendChild(empty);
+        return;
+    }
+
+    players.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'player-list-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'player-list-item-name';
+        nameSpan.textContent = p.name;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'player-list-delete-btn';
+        deleteBtn.textContent = '×';
+        deleteBtn.setAttribute('aria-label', `حذف ${p.name}`);
+        deleteBtn.addEventListener('click', () => removePlayerFromWheel(p.uid));
+
+        li.appendChild(nameSpan);
+        li.appendChild(deleteBtn);
+        playerListItemsEl.appendChild(li);
+    });
+}
+
+// يحذف لاعباً محدداً فوراً من العجلة النشطة ومن القائمة الجانبية، دون
+// المساس ببقية اللاعبين أو إعادة تعيين أي شيء آخر في اللعبة
+function removePlayerFromWheel(uid) {
+    if (isSpinning) {
+        showToast("لا يمكن حذف لاعب أثناء دوران العجلة");
+        return;
+    }
+
+    const idx = players.findIndex(p => p.uid === uid);
+    if (idx === -1) return;
+
+    const [removed] = players.splice(idx, 1);
+
+    // إزالة اسمه أيضاً من القائمة الكاملة المحفوظة بين الجولات (أول ظهور فقط)
+    const rosterIdx = fullRoster.indexOf(removed.name);
+    if (rosterIdx !== -1) fullRoster.splice(rosterIdx, 1);
+
+    showToast(`تم حذف اللاعب [ ${removed.name} ] من العجلة`);
+
+    if (players.length === 0) {
+        drawEmptyWheel();
+        updatePlayerCount();
+    } else if (gameStarted && players.length === 1) {
+        // حذف يدوي أوصل العدد إلى لاعب واحد فقط أثناء جولة جارية = فوز مباشر
+        updatePlayerCount();
+        showFinalWinner();
+    } else {
+        drawWheel();
+    }
 }
 
 // ============================================================
@@ -519,8 +651,8 @@ addBtn.addEventListener('click', () => {
     const lines = namesInput.value.split('\n');
     const names = lines.map(l => l.trim()).filter(l => l !== "");
 
-    if (!gameStarted) {
-        // ----- قبل بدء الجولة: نبني قائمة اللاعبين من الصفر كالمعتاد -----
+    if (!gameStarted && players.length === 0) {
+        // ----- أول إضافة فقط: نبني قائمة اللاعبين من الصفر كالمعتاد -----
         if (names.length < 2) {
             showToast("يرجى إدخال اسمين على الأقل لتفعيل العجلة.");
             return;
@@ -533,6 +665,7 @@ addBtn.addEventListener('click', () => {
         lastLandedName = null;
         names.forEach(n => { eliminationCounts[n] = 0; });
         currentAngle = 0;
+        fullRoster = [...names];
 
         drawWheel();
         startBtn.classList.remove('hidden');
@@ -541,8 +674,9 @@ addBtn.addEventListener('click', () => {
         return;
     }
 
-    // ----- أثناء الجولة: نُضيف فقط الأسماء الجديدة إلى العجلة الحالية
-    //       (دفعاً/push) دون المساس بمن هم موجودون بالفعل أو بحالة اللعبة -----
+    // ----- أي إضافة لاحقة (قبل أو بعد بدء الجولة): نُضيف فقط الأسماء
+    //       الجديدة إلى العجلة الحالية (دفعاً/push) دون المساس بمن هم
+    //       موجودون بالفعل أو بحالة اللعبة -----
     if (names.length === 0) {
         showToast("يرجى كتابة اسم واحد على الأقل لإضافته.");
         return;
@@ -551,6 +685,7 @@ addBtn.addEventListener('click', () => {
     names.forEach(name => {
         players.push({ uid: ++uidCounter, name });
         if (!(name in eliminationCounts)) eliminationCounts[name] = 0;
+        fullRoster.push(name);
     });
 
     drawWheel();
@@ -651,6 +786,10 @@ spinBtn.addEventListener('click', () => {
 
 // تحديد الاسم الذي يستقر عنده السهم العلوي (السهم عند زاوية 270°)
 function resolveLanding() {
+    // حدث "توقف العجلة" - نُهيّئ صوت الفائز هنا مباشرة (استمراراً لتفاعل
+    // المستخدم مع زر التدوير) حتى يعمل التشغيل الفعلي لاحقاً بدون مشاكل
+    primeWinnerAudio();
+
     const numSegments = players.length;
     const segmentAngle = 360 / numSegments;
 
@@ -705,6 +844,7 @@ function randomTribeCards(count) {
 // عدد البطاقات يبقى مساوياً لعدد اللاعبين النشطين: بطاقة واحدة منها "آمنة"
 // (تمثل اللاعب المختار نفسه) ولا تؤدي أبداً لإقصاء أحد إن تم اختيارها.
 function openEliminationModal() {
+    modal.classList.remove('reentry-modal');
     const chooserName = players[landedIndex].name;
 
     if (modalChooserNameEl) modalChooserNameEl.textContent = chooserName;
@@ -779,32 +919,59 @@ function openReentryModal() {
     if (modalChooserNameEl) modalChooserNameEl.textContent = chooserName;
     modalTitle.textContent = "فرصة إرجاع لاعب! (هبطت العجلة على نفس الاسم مرتين متتاليتين)";
     modalActions.innerHTML = "";
+    modal.classList.add('reentry-modal'); // خلفية خضراء مميزة لنافذة الإرجاع
 
-    // نحدد فقط اللاعبين المقصيين الذين لم يستخدموا فرصة إرجاعهم الوحيدة بعد
-    const eligibleIndices = eliminatedPlayers
-        .map((p, idx) => idx)
-        .filter(idx => !reentryUsed[eliminatedPlayers[idx].name]);
+    const totalEliminated = eliminatedPlayers.length;
 
-    if (eligibleIndices.length === 0) {
+    if (totalEliminated === 0) {
         modalSubtitle.textContent = "";
         tribesContainer.innerHTML = "";
         if (modalChooserNameEl) modalChooserNameEl.textContent = "";
-        showToast("لا يوجد لاعبين مؤهلين للإرجاع حالياً");
+        modal.classList.remove('reentry-modal');
+        showToast("لا يوجد لاعبين مقصيين حالياً");
         finishRoundOrDraw();
         return;
     }
 
+    // نحدد اللاعبين المقصيين الذين لم يستخدموا فرصة إرجاعهم الوحيدة بعد
+    const eligibleIndices = eliminatedPlayers
+        .map((p, idx) => idx)
+        .filter(idx => !reentryUsed[eliminatedPlayers[idx].name]);
+
     modalSubtitle.textContent = "اختر قبيلة لمحاولة إرجاع لاعب مقصي بشكل عشوائي (الأسماء الحقيقية مخفية)";
     tribesContainer.innerHTML = "";
 
-    const tribeLabels = randomTribeCards(eligibleIndices.length);
-    eligibleIndices.forEach((originalIdx, i) => {
+    // عدد بطاقات القبائل العادية يطابق بالضبط عدد اللاعبين المقصيين حالياً،
+    // بالإضافة إلى بطاقة واحدة إضافية بأسم قبيلة عشوائي في الأسفل
+    const tribeLabels = randomTribeCards(totalEliminated + 1);
+
+    // كل لاعب مقصي يحصل على فتحة: المؤهلون (لم يستخدموا فرصتهم بعد) يحملون
+    // فرصة إرجاع حقيقية، ومن استهلك فرصته سابقاً تصبح فتحته فارغة (بدون
+    // إلغاء قاعدة "فرصة إرجاع واحدة فقط لكل لاعب")
+    const slotAssignments = eliminatedPlayers.map((p, idx) => (
+        eligibleIndices.includes(idx) ? idx : null
+    ));
+    const shuffledSlots = shuffleArray(slotAssignments);
+
+    shuffledSlots.forEach((originalIdx, i) => {
         const card = document.createElement('div');
         card.classList.add('tribe-card');
         card.textContent = tribeLabels[i];
-        card.addEventListener('click', () => handleReentryChoice(originalIdx), { once: true });
+        if (originalIdx !== null) {
+            card.addEventListener('click', () => handleReentryChoice(originalIdx), { once: true });
+        } else {
+            card.addEventListener('click', handleReentryEmptyChoice, { once: true });
+        }
         tribesContainer.appendChild(card);
     });
+
+    // فتحة إضافية ثابتة في الأسفل بأسم قبيلة عشوائي (بدل نص ثابت) حتى تبدو
+    // كبطاقة عادية تماماً، لكنها تبقى وظيفياً فتحة "لا يوجد خلفها أحد"
+    const emptyCard = document.createElement('div');
+    emptyCard.classList.add('tribe-card', 'reentry-empty-card');
+    emptyCard.textContent = tribeLabels[totalEliminated];
+    emptyCard.addEventListener('click', handleReentryEmptyChoice, { once: true });
+    tribesContainer.appendChild(emptyCard);
 
     // زر التخطي - لمن يريد المتابعة دون محاولة إرجاع أحد
     const skipBtn = document.createElement('button');
@@ -814,6 +981,15 @@ function openReentryModal() {
     modalActions.appendChild(skipBtn);
 
     modal.style.display = 'flex';
+}
+
+// نتيجة اختيار فتحة "لا يوجد خلفها أحد" أو فتحة لاعب استهلك فرصة إرجاعه مسبقاً
+function handleReentryEmptyChoice() {
+    modal.style.display = 'none';
+    modalActions.innerHTML = "";
+    lastLandedName = null;
+    triggerEffect(`لم يعد أحد! 🙃<br>حظ أوفر في المرة القادمة`, 'joy-effect');
+    afterDecision();
 }
 
 function handleReentryChoice(originalIdx) {
@@ -883,6 +1059,7 @@ function triggerEffect(htmlText, className) {
 //  إعلان الفائز النهائي
 // ============================================================
 function showFinalWinner() {
+    updatePlayerCount();
     const winner = players[0] ? players[0].name : "لا أحد";
 
     // إيجاد صاحب أكبر عدد إقصاءات من بين كل الأسماء التي دخلت اللعبة
@@ -931,6 +1108,7 @@ function resetGame() {
     eliminatedPlayers = [];
     eliminationCounts = {};
     reentryUsed = {};
+    fullRoster = [];
     lastLandedName = null;
     currentAngle = 0;
     isSpinning = false;
@@ -960,6 +1138,7 @@ function resetGame() {
     winnerOverlay.style.display = 'none';
     effectOverlay.style.display = 'none';
     modal.style.display = 'none';
+    modal.classList.remove('reentry-modal');
     modalActions.innerHTML = "";
     if (modalChooserNameEl) modalChooserNameEl.textContent = "";
 
@@ -971,4 +1150,50 @@ function resetGame() {
 }
 
 resetBtn.addEventListener('click', resetGame);
-playAgainBtn.addEventListener('click', resetGame);
+
+// ============================================================
+//  جولة جديدة بنفس اللاعبين (زر "لعبة جديدة" بعد إعلان الفائز)
+//  على عكس إعادة التعيين الكاملة، هذه الدالة لا تمسح أو تعيد خلط أسماء
+//  اللاعبين، بل تُعيد كل من دخل اللعبة (بمن فيهم من تم إقصاؤه) إلى العجلة
+//  من جديد وجاهزين مباشرة لجولة تالية، دون الحاجة لإعادة كتابة الأسماء
+// ============================================================
+function startNextRound() {
+    // احتياط: إن لم يبقَ عدد كافٍ من الأسماء المحفوظة (حالة نادرة)، نلجأ لإعادة التعيين الكاملة
+    if (fullRoster.length < 2) {
+        resetGame();
+        return;
+    }
+
+    players = fullRoster.map(name => ({ uid: ++uidCounter, name }));
+    eliminatedPlayers = [];
+    eliminationCounts = {};
+    fullRoster.forEach(n => { eliminationCounts[n] = 0; });
+    reentryUsed = {};
+    lastLandedName = null;
+    currentAngle = 0;
+    isSpinning = false;
+    landedIndex = null;
+    stopSpinTicks();
+    stopBubblesCelebration();
+
+    drawWheel();
+    spinBtn.classList.remove('hidden');
+    spinBtn.disabled = false;
+
+    winnerOverlay.style.display = 'none';
+    effectOverlay.style.display = 'none';
+    modal.style.display = 'none';
+    modal.classList.remove('reentry-modal');
+    modalActions.innerHTML = "";
+    if (modalChooserNameEl) modalChooserNameEl.textContent = "";
+
+    // إخفاء شريط الفائز الضخم عند بدء الجولة الجديدة
+    if (winnerBanner && winnerBannerNameEl) {
+        winnerBanner.classList.remove('show');
+        winnerBannerNameEl.textContent = "";
+    }
+
+    showToast(`جولة جديدة! تمت إعادة جميع اللاعبين (${players.length}) إلى العجلة`);
+}
+
+playAgainBtn.addEventListener('click', startNextRound);
