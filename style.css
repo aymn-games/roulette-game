@@ -1,0 +1,1268 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    background: linear-gradient(135deg, #000000, #1a0033, #000000);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    color: #80d4ff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    overflow-x: hidden;
+    position: relative;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.hidden { display: none !important; }
+
+/* ============================================================
+   شاشة الافتتاح الاحترافية (Blurred Intro Screen)
+   ============================================================ */
+.intro-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 0, 15, 0.55);
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+    transition: opacity 1s ease, -webkit-backdrop-filter 1s ease, backdrop-filter 1s ease;
+}
+
+.intro-overlay.fade-out {
+    opacity: 0;
+    -webkit-backdrop-filter: blur(0px);
+    backdrop-filter: blur(0px);
+    pointer-events: none;
+}
+
+.intro-title {
+    font-size: 56px;
+    font-weight: 800;
+    color: #fff;
+    text-align: center;
+    padding: 0 24px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 28px #b300ff, 0 0 14px #80d4ff;
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+    transition: opacity 1.1s ease, transform 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.intro-title.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+@media (max-width: 720px) {
+    .intro-title { font-size: 34px; }
+}
+
+/* ============================================================
+   شريط إعلان الفائز الضخم (أعلى الشاشة، فوق لوحة اللاعبين)
+   ============================================================ */
+.winner-banner {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    z-index: 55;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(-30px) scale(0.9);
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.winner-banner.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.winner-banner-label {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #ffd700;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+}
+
+.winner-banner-name {
+    font-size: 58px;
+    font-weight: 900;
+    color: #ffd700;
+    text-align: center;
+    line-height: 1.15;
+    text-shadow: 0 0 32px #ffd700, 0 0 16px #b300ff;
+}
+
+@media (max-width: 900px) {
+    .winner-banner-name { font-size: 40px; }
+}
+
+@media (max-width: 480px) {
+    .winner-banner-name { font-size: 28px; }
+    .winner-banner { top: 8px; }
+}
+
+/* جزيئات الخلفية المتحركة */
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    bottom: -20px;
+    background: rgba(128, 212, 255, 0.55);
+    border-radius: 50%;
+    animation: floatUp linear infinite;
+    box-shadow: 0 0 6px rgba(179, 0, 255, 0.7);
+}
+
+@keyframes floatUp {
+    0%   { transform: translateY(0) scale(0); opacity: 0; }
+    10%  { opacity: 0.9; }
+    90%  { opacity: 0.6; }
+    100% { transform: translateY(-110vh) scale(1); opacity: 0; }
+}
+
+/* ============================================================
+   الشعار العائم (أسفل يسار الصفحة - بحجم مكبّر 2.5x إضافية)
+   ============================================================ */
+.floating-logo {
+    position: fixed;
+    bottom: 130px;
+    left: 24px;
+    width: 825px;
+    max-width: 55vw;
+    height: auto;
+    z-index: 45;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: drop-shadow(0 0 12px #80d4ff) drop-shadow(0 0 20px #b300ff);
+    animation: logoFloat 4s ease-in-out infinite, logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-16px) rotate(2deg); }
+}
+
+@keyframes logoPulse {
+    0%, 100% { filter: drop-shadow(0 0 12px #80d4ff) drop-shadow(0 0 18px #b300ff); }
+    50%      { filter: drop-shadow(0 0 22px #80d4ff) drop-shadow(0 0 32px #b300ff); }
+}
+
+/* ============================================================
+   طبقة الإيموجي العائم (فرح / حزن) - تظهر لمدة 3 ثوانٍ
+   ============================================================ */
+.emoji-float-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 250;
+    overflow: hidden;
+}
+
+.floating-emoji {
+    position: absolute;
+    bottom: -60px;
+    opacity: 0;
+    animation-name: emojiFloat;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.4));
+}
+
+@keyframes emojiFloat {
+    0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+    12%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(-105vh) translateX(var(--drift, 0px)) rotate(25deg); opacity: 0; }
+}
+
+/* ============================================================
+   متحكم مستوى الصوت
+   ============================================================ */
+.volume-control {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 5, 30, 0.85);
+    border: 2px solid #b300ff;
+    border-radius: 30px;
+    padding: 8px 16px;
+    box-shadow: 0 0 20px rgba(179, 0, 255, 0.5);
+    z-index: 60;
+}
+
+.volume-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 110px;
+    height: 6px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #b300ff, #80d4ff);
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+    border: none;
+}
+
+@media (max-width: 900px) {
+    .volume-control {
+        top: 10px;
+        left: 10px;
+        padding: 6px 12px;
+    }
+    .volume-slider {
+        width: 80px;
+    }
+}
+.game-container {
+    display: block;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    z-index: 2;
+}
+
+/* ============================================================
+   الترويسة العلوية: عنوان اللعبة + اسم الستريمر
+   ============================================================ */
+.top-header {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    padding: 0 16px;
+    max-width: 90vw;
+}
+
+/* حاوية حقل اسم الستريمر + زر الإغلاق (X)
+   نُخفي هذه الحاوية بالشفافية (opacity) فقط بدل display:none، حتى تبقى
+   مساحتها محجوزة داخل .top-header ولا يتحرك العنوان أو أي عنصر آخر
+   في الصفحة عند إخفائها */
+.streamer-name-wrapper {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 60;
+    display: inline-flex;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+/* ============================================================
+   رابط العودة إلى موقع ألعاب أيمن (أعلى الصفحة، فوق العنوان)
+   ============================================================ */
+.back-to-games-link {
+    display: inline-block;
+    background: rgba(15, 5, 30, 0.85);
+    border: 1px solid #80d4ff;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: #80d4ff;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: 0 0 10px rgba(128, 212, 255, 0.35);
+    transition: box-shadow 0.3s ease, transform 0.2s ease, color 0.3s ease;
+}
+
+.back-to-games-link:hover {
+    color: #fff;
+    box-shadow: 0 0 18px #80d4ff;
+    transform: translateY(-1px);
+}
+
+.streamer-name-wrapper.dismissed {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px) scale(0.97);
+}
+
+.streamer-name-input {
+    background: rgba(15, 5, 30, 0.85);
+    border: 2px solid #b300ff;
+    border-radius: 24px;
+    color: #80d4ff;
+    padding: 8px 20px;
+    font-size: 14px;
+    text-align: center;
+    outline: none;
+    width: 240px;
+    max-width: 60vw;
+    box-shadow: 0 0 14px rgba(179, 0, 255, 0.4);
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.streamer-name-input:focus {
+    border-color: #80d4ff;
+    box-shadow: 0 0 22px rgba(128, 212, 255, 0.65);
+}
+
+.streamer-name-input::placeholder {
+    color: rgba(128, 212, 255, 0.55);
+}
+
+/* زر الإغلاق (X) العائم بأعلى-يمين حقل اسم الستريمر، بلمسة نيون
+   بنفسجي/وردي متناسقة مع هوية الحاوية */
+.streamer-name-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 5, 35, 0.9);
+    border: 1px solid #ff2ee6;
+    border-radius: 50%;
+    color: #ff2ee6;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 0 8px #ff2ee6, 0 0 4px #b300ff;
+    transition: box-shadow 0.25s ease, transform 0.2s ease, color 0.25s ease;
+    z-index: 2;
+}
+
+.streamer-name-close:hover {
+    box-shadow: 0 0 14px #ff2ee6, 0 0 9px #b300ff;
+    transform: scale(1.15);
+    color: #fff;
+}
+
+/* اسم الستريمر داخل العنوان - خط مميز يفصله بصرياً عن العنوان الرئيسي */
+.streamer-name-highlight {
+    font-family: 'Audiowide', 'Segoe UI', cursive;
+    color: #ff2ee6;
+    text-shadow: 0 0 12px #ff2ee6, 0 0 22px #b300ff, 0 0 4px #fff;
+    letter-spacing: 1px;
+}
+
+/* ============================================================
+   طبقة فقاعات الاحتفال بالفائز
+   ============================================================ */
+.bubbles-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 210;
+    overflow: hidden;
+}
+
+.celebration-bubble {
+    position: absolute;
+    bottom: -60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), rgba(128,212,255,0.35) 45%, rgba(179,0,255,0.25) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 10px rgba(128, 212, 255, 0.6), inset 0 0 8px rgba(255,255,255,0.5);
+    animation-name: bubbleRise;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+}
+
+@keyframes bubbleRise {
+    0%   { transform: translateX(0) translateY(0) scale(0.6); opacity: 0; }
+    10%  { opacity: 0.9; }
+    100% { transform: translateX(var(--bubble-drift, 0px)) translateY(-115vh) scale(1); opacity: 0; }
+}
+
+/* ============================================================
+   طبقة العجلة القابلة للسحب - تظهر في منتصف الشاشة أسفل الترويسة
+   مباشرة، وتتحول إلى تموضع "fixed" بالبكسل فور أول عملية سحب حتى
+   يمكن للستريمر وضعها في أي مكان يناسب تخطيط بثه المباشر
+   ============================================================ */
+.wheel-drag-layer {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: fit-content;
+    margin: 0;
+    z-index: 8;
+    user-select: none;
+}
+
+.wheel-wrapper {
+    position: relative;
+    width: min(450px, 90vw);
+    height: min(450px, 90vw);
+    transform-origin: center center;
+    transition: transform 0.25s ease;
+}
+
+/* ============================================================
+   متحكم تكبير/تصغير العجلة المباشر (يعمل أثناء البث والجولة الجارية)
+   ============================================================ */
+.wheel-scale-control {
+    position: fixed;
+    top: 84px;
+    left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 5, 30, 0.85);
+    border: 2px solid #b300ff;
+    border-radius: 30px;
+    padding: 8px 18px;
+    box-shadow: 0 0 20px rgba(179, 0, 255, 0.5);
+    z-index: 60;
+}
+
+.scale-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.wheel-scale-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 160px;
+    height: 6px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #b300ff, #80d4ff);
+    outline: none;
+    cursor: pointer;
+}
+
+.wheel-scale-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+}
+
+.wheel-scale-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #80d4ff;
+    box-shadow: 0 0 8px #80d4ff;
+    cursor: pointer;
+    border: none;
+}
+
+@media (max-width: 900px) {
+    .wheel-scale-control {
+        top: 60px;
+        left: 10px;
+        padding: 6px 12px;
+    }
+    .wheel-scale-slider { width: 110px; }
+}
+
+#wheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: 0 0 35px #b300ff, 0 0 18px #80d4ff;
+    background-color: #111;
+}
+
+.arrow {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 28px solid #ff3366;
+    z-index: 10;
+    filter: drop-shadow(0 0 10px #ff3366);
+}
+
+#spin-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #b300ff, #1a0033);
+    border: 3px solid #80d4ff;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 20px #80d4ff;
+    z-index: 5;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+}
+
+#spin-btn:hover:not(:disabled) {
+    transform: translate(-50%, -50%) scale(1.08);
+    box-shadow: 0 0 32px #b300ff;
+}
+
+#spin-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* قسم التحكم - نافذة ثابتة في يمين الشاشة */
+.controls-section {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    width: 280px;
+    max-width: 90vw;
+    max-height: 75vh;
+    overflow-y: auto;
+    background: rgba(15, 5, 30, 0.88);
+    border: 2px solid #b300ff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 25px rgba(179, 0, 255, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 40;
+}
+
+.controls-section-title {
+    text-align: center;
+    font-size: 15px;
+    color: #fff;
+    text-shadow: 0 0 8px #b300ff;
+    margin-bottom: 4px;
+}
+
+.game-title {
+    text-align: center;
+    font-size: 34px;
+    letter-spacing: 1px;
+    color: #fff;
+    text-shadow: 0 0 16px #b300ff, 0 0 6px #80d4ff;
+}
+
+#names-input {
+    width: 100%;
+    height: 180px;
+    background: rgba(15, 5, 30, 0.8);
+    border: 2px solid #b300ff;
+    border-radius: 12px;
+    color: #80d4ff;
+    padding: 15px;
+    font-size: 16px;
+    resize: vertical;
+    box-shadow: 0 0 15px rgba(179, 0, 255, 0.4);
+    outline: none;
+    transition: box-shadow 0.3s, border-color 0.3s, height 0.3s, font-size 0.3s;
+    text-align: right;
+}
+
+#names-input:focus {
+    border-color: #80d4ff;
+    box-shadow: 0 0 25px rgba(128, 212, 255, 0.7);
+}
+
+.player-count {
+    text-align: center;
+    font-size: 14px;
+    color: #b8e8ff;
+    min-height: 18px;
+}
+
+.buttons-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* أزرار عامة */
+.btn {
+    padding: 14px;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    color: #fff;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn-primary { background: linear-gradient(45deg, #4d0099, #b300ff); border: 1px solid #80d4ff; }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 0 20px #b300ff; transform: translateY(-2px); }
+
+.btn-success { background: linear-gradient(45deg, #006622, #00cc44); }
+.btn-success:hover:not(:disabled) { box-shadow: 0 0 20px #00cc44; transform: translateY(-2px); }
+
+.btn-secondary { background: linear-gradient(45deg, #222, #555); border: 1px solid #80d4ff; }
+.btn-secondary:hover:not(:disabled) { box-shadow: 0 0 15px #80d4ff; transform: translateY(-2px); }
+
+.btn-danger { background: linear-gradient(45deg, #800000, #ff3333); }
+.btn-danger:hover:not(:disabled) { box-shadow: 0 0 20px #ff3333; transform: translateY(-2px); }
+
+.btn-skip {
+    background: linear-gradient(45deg, #333, #666);
+    border: 1px solid #80d4ff;
+    width: 100%;
+}
+.btn-skip:hover:not(:disabled) {
+    box-shadow: 0 0 16px #80d4ff;
+    transform: translateY(-2px);
+}
+
+/* ============================================================
+   الشريط الجانبي الأيسر - أزرار إعادة الترتيب وإعادة التعيين
+   ============================================================ */
+.left-controls {
+    position: fixed;
+    top: 110px;
+    left: 24px;
+    width: 230px;
+    background: rgba(15, 5, 30, 0.88);
+    border: 2px solid #b300ff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 25px rgba(179, 0, 255, 0.5);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.left-controls h3 {
+    text-align: center;
+    font-size: 15px;
+    color: #fff;
+    text-shadow: 0 0 8px #b300ff;
+    margin-bottom: 4px;
+}
+
+/* ============================================================
+   الشريط الجانبي الدائم أثناء الجولة
+   ============================================================ */
+.game-sidebar {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    width: 240px;
+    max-height: 65vh;
+    overflow-y: auto;
+    background: rgba(15, 5, 30, 0.88);
+    border: 2px solid #b300ff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 25px rgba(179, 0, 255, 0.5);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.game-sidebar h3 {
+    text-align: center;
+    font-size: 15px;
+    color: #fff;
+    text-shadow: 0 0 8px #b300ff;
+    margin-bottom: 4px;
+}
+
+.game-sidebar #names-input {
+    height: 120px;
+    font-size: 13px;
+    padding: 8px;
+}
+
+.game-sidebar #add-btn {
+    padding: 10px;
+    font-size: 13px;
+}
+
+/* ============================================================
+   قائمة اللاعبين الحية داخل الشريط الجانبي (مع زر حذف لكل لاعب)
+   ============================================================ */
+.player-list-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 0 2px 0 0;
+    margin: 0;
+}
+
+.player-list-items::-webkit-scrollbar {
+    width: 6px;
+}
+
+.player-list-items::-webkit-scrollbar-thumb {
+    background: #80d4ff;
+    border-radius: 4px;
+}
+
+.player-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: rgba(128, 212, 255, 0.08);
+    border: 1px solid rgba(128, 212, 255, 0.35);
+    border-radius: 8px;
+    padding: 6px 10px;
+    animation: popIn 0.2s ease;
+}
+
+.player-list-item-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-list-delete-btn {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #ff4d6d;
+    background: transparent;
+    color: #ff4d6d;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.player-list-delete-btn:hover {
+    background: #ff4d6d;
+    color: #fff;
+    transform: scale(1.1);
+}
+
+.player-list-empty {
+    text-align: center;
+    font-size: 12px;
+    color: #b8e8ff;
+    opacity: 0.7;
+    padding: 6px 0;
+}
+
+/* النوافذ المنبثقة (القبائل) */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal-content {
+    position: relative;
+    background: #110022;
+    border: 3px solid #b300ff;
+    box-shadow: 0 0 35px #b300ff;
+    padding: 38px;
+    border-radius: 18px;
+    width: 95vw;
+    max-width: 1600px;
+    max-height: 88vh;
+    overflow-y: auto;
+    text-align: center;
+    animation: popIn 0.25s ease;
+}
+
+/* زر إغلاق نافذة اختيار القبيلة (علامة X) - أعلى يمين النافذة دائماً */
+.modal-close-btn {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid #80d4ff;
+    background: rgba(15, 5, 30, 0.9);
+    color: #80d4ff;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.modal-close-btn:hover {
+    background: #80d4ff;
+    color: #110022;
+    transform: scale(1.08);
+}
+
+.modal.reentry-modal .modal-close-btn {
+    border-color: #22c55e;
+    color: #bbf7d0;
+}
+
+.modal.reentry-modal .modal-close-btn:hover {
+    background: #22c55e;
+    color: #04160c;
+}
+
+.modal-chooser-name {
+    font-size: 44px;
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 0 0 30px #ffd700, 0 0 16px #b300ff, 0 0 6px #80d4ff;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    line-height: 1.15;
+}
+
+.modal-chooser-name:empty {
+    display: none;
+    margin-bottom: 0;
+}
+
+#modal-title {
+    font-size: 26px;
+}
+
+@keyframes popIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+
+.modal-subtitle {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #b8e8ff;
+    opacity: 0.85;
+}
+
+.tribes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 20px;
+    margin-top: 22px;
+}
+
+.tribe-card {
+    background: #220044;
+    border: 2px solid #80d4ff;
+    padding: 22px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 17px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tribe-card-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #80d4ff;
+    color: #110022;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.tribe-card-name {
+    line-height: 1.3;
+}
+
+.tribe-card:hover {
+    background: #80d4ff;
+    color: #000;
+    transform: scale(1.05);
+}
+
+.tribe-card:hover .tribe-card-number {
+    background: #110022;
+    color: #80d4ff;
+}
+
+.modal.reentry-modal .tribe-card-number {
+    background: #22c55e;
+    color: #04160c;
+}
+
+.modal.reentry-modal .tribe-card:hover .tribe-card-number {
+    background: #052e17;
+    color: #22c55e;
+}
+
+.modal-actions {
+    margin-top: 6px;
+}
+
+/* ============================================================
+   نافذة إرجاع اللاعب - خلفية خضراء مميزة لتمييزها فوراً عن نافذة الإقصاء
+   ============================================================ */
+.modal.reentry-modal .modal-content {
+    background: #052e17;
+    border-color: #22c55e;
+    box-shadow: 0 0 35px #22c55e;
+}
+
+.modal.reentry-modal .modal-subtitle {
+    color: #bbf7d0;
+}
+
+.modal.reentry-modal .tribe-card {
+    border-color: #22c55e;
+}
+
+.modal.reentry-modal .tribe-card:hover {
+    background: #22c55e;
+    color: #04160c;
+}
+
+/* الفتحة الإضافية في الأسفل - تبدو الآن كبطاقة قبيلة عادية تماماً (بأسم
+   قبيلة عشوائي) دون أي تمييز بصري، حتى لا تكشف أنها فتحة "بلا أحد خلفها" */
+.reentry-empty-card {
+    /* لا فرق بصري متعمد عن .tribe-card - القاعدة موجودة فقط كمرجع مستقبلي */
+}
+
+/* تأثيرات الفرح والحزن */
+.effect-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.9);
+    padding: 20px;
+    text-align: center;
+}
+
+.effect-content {
+    font-size: 32px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 90%;
+}
+
+.sad-effect { color: #ff3333; text-shadow: 0 0 20px #ff3333; animation: shake 0.4s infinite; }
+.joy-effect { color: #00ff66; text-shadow: 0 0 20px #00ff66; animation: bounce 0.5s infinite; }
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px) rotate(-1deg); }
+    75% { transform: translateX(8px) rotate(1deg); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-18px) scale(1.05); }
+}
+
+/* ============================================================
+   بطاقة الفوز الاحترافية
+   ============================================================ */
+.winner-card-pro {
+    text-align: center;
+    padding: 50px 40px;
+    border-radius: 22px;
+    max-width: 480px;
+    width: 100%;
+    background: linear-gradient(160deg, rgba(26,0,51,0.97), rgba(8,0,18,0.98));
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 50px #ffd700, 0 0 30px #b300ff inset;
+    animation: popIn 0.45s ease, winnerGlow 2.6s ease-in-out infinite;
+}
+
+@keyframes winnerGlow {
+    0%, 100% { box-shadow: 0 0 45px #ffd700, 0 0 25px #b300ff inset; }
+    50%      { box-shadow: 0 0 80px #ffd700, 0 0 45px #b300ff inset; }
+}
+
+.trophy {
+    font-size: 74px;
+    margin-bottom: 6px;
+    animation: bounce 1s infinite;
+}
+
+.winner-label {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #80d4ff;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    opacity: 0.9;
+}
+
+#winner-name {
+    font-size: 40px;
+    color: #ffd700;
+    text-shadow: 0 0 25px #ffd700, 0 0 10px #b300ff;
+}
+
+.winner-divider {
+    width: 55%;
+    height: 1px;
+    margin: 20px auto;
+    background: linear-gradient(90deg, transparent, #b300ff, transparent);
+}
+
+.eliminator-box {
+    background: rgba(179, 0, 255, 0.12);
+    border: 1px solid rgba(128, 212, 255, 0.4);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 26px;
+}
+
+#winner-eliminator {
+    font-size: 17px;
+    color: #80d4ff;
+}
+
+/* صندوق الرسائل السريعة */
+.toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1a0033;
+    border: 2px solid #b300ff;
+    box-shadow: 0 0 20px rgba(179,0,255,0.6);
+    color: #80d4ff;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: bold;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    text-align: center;
+    max-width: 90%;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* التذييل */
+footer {
+    width: 100%;
+    text-align: center;
+    padding: 20px;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.4);
+    border-top: 1px solid rgba(179, 0, 255, 0.2);
+}
+
+.signature {
+    font-size: 16px;
+    font-weight: bold;
+    color: #80d4ff;
+    text-shadow: 0 0 8px rgba(128, 212, 255, 0.6);
+}
+
+.tiktok {
+    font-size: 14px;
+    margin-top: 5px;
+    color: #aaa;
+}
+
+.tiktok .username {
+    color: #ff3366;
+    font-weight: bold;
+}
+
+/* تجاوب مع الشاشات الصغيرة */
+@media (max-width: 900px) {
+    .floating-logo {
+        bottom: 80px;
+        left: 12px;
+        width: 480px;
+        max-width: 65vw;
+    }
+    .game-sidebar {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        margin: 20px auto 0;
+        top: auto;
+        right: auto;
+    }
+    .left-controls {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        margin: 16px auto 0;
+        top: auto;
+        left: auto;
+    }
+    .controls-section {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        max-height: none;
+        margin: 20px auto 0;
+        top: auto;
+        right: auto;
+    }
+    .streamer-name-wrapper {
+        position: static;
+        margin: 10px auto 0;
+        justify-content: center;
+    }
+    .wheel-drag-layer {
+        position: static;
+        top: auto;
+        left: auto;
+        transform: none;
+        margin: 150px auto 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .top-header { top: 8px; }
+    .game-title { font-size: 24px; }
+    .streamer-name-input { font-size: 13px; padding: 7px 14px; width: 200px; }
+    .modal-chooser-name { font-size: 30px; }
+}
+
+@media (max-width: 720px) {
+    .game-container {
+        flex-direction: column;
+        gap: 25px;
+        margin: 15px auto;
+    }
+    .game-title { font-size: 22px; }
+    .tribes-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .tribe-card { padding: 16px 8px; font-size: 15px; }
+    .modal-content { width: 96vw; padding: 24px; }
+    .modal-close-btn { top: 8px; left: 8px; width: 32px; height: 32px; font-size: 18px; }
+    #winner-name { font-size: 28px; }
+    .effect-content { font-size: 24px; }
+    .winner-card-pro { padding: 34px 22px; }
+}
+
+/* ============================================================
+   تجاوب إضافي لأجهزة اللوحي (آيباد) بمقاسات البورتريه واللاندسكيب
+   ============================================================ */
+@media (min-width: 901px) and (max-width: 1112px) {
+    .controls-section,
+    .game-sidebar {
+        width: 230px;
+        right: 14px;
+    }
+    .left-controls {
+        width: 200px;
+        left: 14px;
+    }
+    .wheel-wrapper {
+        width: min(380px, 42vw);
+        height: min(380px, 42vw);
+    }
+}
+
+@media (max-width: 900px) and (min-width: 481px) {
+    .tribes-grid { grid-template-columns: repeat(3, 1fr); }
+}
