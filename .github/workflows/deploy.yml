@@ -1,0 +1,25 @@
+name: Deploy Game to Main Repo
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  copy-game:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Game Repo
+        uses: actions/checkout@v4
+
+      - name: Copy files to Main Repo
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.GAME_DEPLOY_TOKEN }}
+        with:
+          source_file: '.'
+          destination_repo: 'aymn-games/ayman-games'
+          destination_folder: 'roulette-game'
+          user_email: 'ayman.games.contact@gmail.com'
+          user_name: 'aymn-games'
+          commit_message: 'Automated update for roulette-game from source repo'
