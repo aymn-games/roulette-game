@@ -17,7 +17,94 @@ const saudiTribes = [
 let players = [];          // [{ uid, name }]
 let eliminatedPlayers = []; // [{ uid, name }]
 let eliminationCounts = {}; // { name: عدد مرات الإقصاء }
-let reentryUsed = {};       // { name: true } - اللاعب استخدم فرصة إرجاعه الوحيدة بالفعل
+let reentryUsed = {};       // { name: count } - عدد مرات إرجاع هذا اللاعب عبر ميزة "انعاش صديق"
+let reentryUsedViaGift = {}; // { name: count } - عدد مرات إرجاعه عبر "الانعاش عن طريق الدعم" (عدّاد مستقل)
+let playerHitCounts = {};    // { name: عدد المرات المستهدَف بنجاح } - لنظام "الطلقات"
+let _giftRevivalAccumulated = 0; // إجمالي قيمة الهدايا المتراكمة منذ آخر إنعاش عبر الدعم
+
+/**
+ * ⚠️ إضافة: قراءة إعدادات الروليت القادمة من agp-shell-config.js (تُضبَط
+ * فعلياً عند الضغط على "بدء الجولة"). القيم الافتراضية هنا تطابق تماماً
+ * السلوك الأصلي القديم (قبل هذا التعديل) — إن لم يكن الـ Shell محمَّلاً
+ * لأي سبب، تعمل اللعبة بنفس سلوكها المعتاد السابق بلا أي تغيير ملحوظ.
+ */
+function getRouletteSettings() {
+    return window.AGP_ROULETTE_SETTINGS || {
+        revivalFriendEnabled: true,
+        revivalFriendReturnCount: 1,
+        revivalSupportEnabled: false,
+        revivalSupportCoinCount: 100,
+        revivalSupportReturnCount: 1
+    };
+}
+
+/**
+ * ⚠️ إضافة: مؤقّت مرحلة الاختيار (إقصاء/إنعاش) — إن كان مفعَّلاً
+ * بالإعدادات (قيمة > 0)، يُغلَق الاختيار تلقائياً كـ"محاولة فاشلة"
+ * (بدون إقصاء ولا إرجاع) عند نفاد الوقت دون اختيار الستريمر أي بطاقة.
+ */
+var _selectionTimerId = null;
+var _selectionTimerBaseText = '';
+
+function clearSelectionTimer() {
+    if (_selectionTimerId !== null) {
+        clearInterval(_selectionTimerId);
+        _selectionTimerId = null;
+    }
+}
+
+function startSelectionTimer(onTimeout) {
+    clearSelectionTimer();
+    var totalSeconds = getRouletteSettings().selectionTimerSeconds || 0;
+    if (!totalSeconds) return; // المؤقّت مغلق افتراضياً — لا شيء يحدث
+
+    _selectionTimerBaseText = modalSubtitle.textContent;
+    var remaining = totalSeconds;
+    modalSubtitle.textContent = _selectionTimerBaseText + ' — الوقت المتبقي: ' + remaining + ' ثانية';
+
+    _selectionTimerId = setInterval(function () {
+        remaining--;
+        if (remaining <= 0) {
+            clearSelectionTimer();
+            onTimeout();
+            return;
+        }
+        modalSubtitle.textContent = _selectionTimerBaseText + ' — الوقت المتبقي: ' + remaining + ' ثانية';
+    }, 1000);
+}
+
+/**
+ * ⚠️ إضافة: إنعاش لاعب عشوائي من المقصيين عبر تراكم قيمة هدايا حقيقية —
+ * يُستدعى من agp-shell-config.js عند وصول أي هدية فعلية (stream:giftReceived).
+ * منطق مستقل تماماً عن آلية "انعاش صديق" (تكرار الاسم بالعجلة)، بعدّاد
+ * محاولات خاص بها (reentryUsedViaGift)، حتى لا تتداخل الحدود بين الميزتين.
+ */
+function tryGiftRevival(giftValue) {
+    var settings = getRouletteSettings();
+    if (!settings.revivalSupportEnabled) return;
+
+    _giftRevivalAccumulated += (Number(giftValue) || 0);
+    var threshold = settings.revivalSupportCoinCount || 100;
+    if (_giftRevivalAccumulated < threshold) return;
+    _giftRevivalAccumulated -= threshold; // الباقي يبقى متراكماً للمرة القادمة
+
+    var maxRevivals = settings.revivalSupportReturnCount || 1;
+    var eligible = eliminatedPlayers.filter(function (p) {
+        return (reentryUsedViaGift[p.name] || 0) < maxRevivals;
+    });
+    if (eligible.length === 0) return;
+
+    var chosen = eligible[Math.floor(Math.random() * eligible.length)];
+    var idx = eliminatedPlayers.indexOf(chosen);
+    eliminatedPlayers.splice(idx, 1);
+    reentryUsedViaGift[chosen.name] = (reentryUsedViaGift[chosen.name] || 0) + 1;
+    players.push({ uid: ++uidCounter, name: chosen.name });
+
+    triggerEffect('إنعاش عبر الدعم! 🎁<br>عاد اللاعب [ ' + chosen.name + ' ] إلى اللعبة', 'joy-effect');
+    spawnFloatingEmojis('happy');
+    drawWheel();
+}
+window.AGP_tryGiftRevival = tryGiftRevival;
 let uidCounter = 0;
 
 // القائمة الكاملة لكل الأسماء التي أضافها الستريمر (تبقى محفوظة بين الجولات
@@ -659,8 +746,13 @@ addBtn.addEventListener('click', () => {
 
     if (!gameStarted && players.length === 0) {
         // ----- أول إضافة فقط: نبني قائمة اللاعبين من الصفر كالمعتاد -----
-        if (names.length < 2) {
-            showToast("يرجى إدخال اسمين على الأقل لتفعيل العجلة.");
+        // ⚠️ تعديل بسيط ومبرَّر: كان الشرط "أقل من 2" (مصمَّم أصلاً
+        // لإدخال يدوي دفعة واحدة من الستريمر). بعد ربط اللعبة بمنصة AGP،
+        // يدخل اللاعبون واحداً تلو الآخر تلقائياً من تعليقات تيك توك —
+        // فأول لاعب ينضم كان سيُرفَض بصمت لولا هذا التعديل. لا تغيير آخر
+        // على هذا الجزء إطلاقاً.
+        if (names.length < 1) {
+            showToast("يرجى إدخال اسم واحد على الأقل لتفعيل العجلة.");
             return;
         }
 
@@ -668,6 +760,8 @@ addBtn.addEventListener('click', () => {
         eliminatedPlayers = [];
         eliminationCounts = {};
         reentryUsed = {};
+        reentryUsedViaGift = {};
+        playerHitCounts = {};
         lastLandedName = null;
         names.forEach(n => { eliminationCounts[n] = 0; });
         currentAngle = 0;
@@ -822,7 +916,9 @@ function openDecisionModal() {
     // نحدّث المتتبع فوراً حتى تُقاس الجولة القادمة بشكل صحيح
     lastLandedName = landedName;
 
-    if (isConsecutiveMatch) {
+    // ⚠️ إضافة: إن كانت ميزة "انعاش صديق" معطَّلة من الإعدادات، يُعامَل
+    // التكرار كإقصاء عادي دون فتح نافذة الإرجاع إطلاقاً.
+    if (isConsecutiveMatch && getRouletteSettings().revivalFriendEnabled !== false) {
         openReentryModal();
     } else {
         openEliminationModal();
@@ -834,6 +930,7 @@ function openDecisionModal() {
 //  قرار (لا إقصاء ولا إرجاع) ويعيد زر التدوير جاهزاً للجولة القادمة مباشرة
 // ============================================================
 function closeDecisionModal() {
+    clearSelectionTimer();
     modal.style.display = 'none';
     modalActions.innerHTML = "";
     modal.classList.remove('reentry-modal');
@@ -895,9 +992,15 @@ function openEliminationModal() {
     });
 
     modal.style.display = 'flex';
+    startSelectionTimer(function () {
+        modal.style.display = 'none';
+        triggerEffect('انتهى الوقت! ⏰<br>لم يُتَّخذ أي قرار، محاولة فاشلة', 'joy-effect');
+        afterDecision();
+    });
 }
 
 function handleEliminationChoice(targetUid) {
+    clearSelectionTimer();
     modal.style.display = 'none';
 
     // الفتحة الآمنة - لا يوجد هدف خلفها فلا يُقصى أحد
@@ -917,12 +1020,8 @@ function handleEliminationChoice(targetUid) {
 
     const eliminationChance = Math.floor(Math.random() * 5); // 0..4
     if (eliminationChance !== 0) {
-        // نجاح الإقصاء (4 من 5 = 80%)
-        players.splice(targetIdx, 1);
-        eliminatedPlayers.push({ name: pName });
-        eliminationCounts[pName] = (eliminationCounts[pName] || 0) + 1;
-        triggerEffect(`تم إقصاء اللاعب ❌<br>[ ${pName} ]`, 'sad-effect');
-        spawnFloatingEmojis('sad');
+        // نجاح المحاولة (4 من 5 = 80%، كما كان تماماً)
+        finalizeSuccessfulHit(targetIdx, pName);
     } else {
         // فشل الإقصاء (1 من 5 = 20%) - يبقى مخفياً خلف القبيلة
         triggerEffect(`إقصاء فاشل! 😎<br>نجا [ ${pName} ] خلف القبيلة!`, 'joy-effect');
@@ -930,6 +1029,63 @@ function handleEliminationChoice(targetUid) {
     }
 
     afterDecision();
+}
+
+/**
+ * ⚠️ إضافة: نظام "الطلقات" — كل نجاح استهداف يُحسَب "ضربة" لهذا اللاعب؛
+ * الإقصاء الفعلي لا يحدث إلا بعد وصول عدد الضربات لعدد الطلقات المحدَّد
+ * بالإعدادات (افتراضياً 1 = إقصاء فوري، نفس السلوك القديم تماماً).
+ */
+function finalizeSuccessfulHit(targetIdx, pName) {
+    var settings = getRouletteSettings();
+    var ticketsTotal = settings.ticketsTotal || 1;
+    playerHitCounts[pName] = (playerHitCounts[pName] || 0) + 1;
+
+    if (playerHitCounts[pName] < ticketsTotal) {
+        var remaining = ticketsTotal - playerHitCounts[pName];
+        triggerEffect('إصابة! 🎯<br>[ ' + pName + ' ] تحمّل الضربة (باقي ' + remaining + ' قبل الإقصاء)', 'sad-effect');
+        spawnFloatingEmojis('sad');
+        return; // لم يُقصَ بعد — يبقى باللعبة، لا إزالة من players
+    }
+
+    finalizeElimination(pName);
+}
+
+/**
+ * ⚠️ إضافة: "تفعيل مؤقت إقصاء اللاعب" — إن كان مفعَّلاً، يُمنَح اللاعب
+ * مهلة قبل الإزالة الفعلية النهائية من اللعبة (10 ثوانٍ)، بدل الإزالة
+ * الفورية. لو أُنعِش بأي وسيلة أخرى أثناء المهلة، يُلغى الإقصاء تلقائياً
+ * (يُتحقَّق أنه لا يزال بقائمة players وقت انتهاء المهلة).
+ */
+var TEMP_ELIMINATION_GRACE_MS = 10000;
+
+function finalizeElimination(pName) {
+    var settings = getRouletteSettings();
+
+    if (settings.tempEliminationEnabled) {
+        triggerEffect('⏳ مهلة أخيرة!<br>[ ' + pName + ' ] سيُقصى خلال ' + (TEMP_ELIMINATION_GRACE_MS / 1000) + ' ثوانٍ ما لم يُنقَذ', 'sad-effect');
+        setTimeout(function () {
+            var idx = players.findIndex(function (p) { return p.name === pName; });
+            if (idx === -1) return; // اتُّنقِذ فعلياً بأي وسيلة أخرى أثناء المهلة
+            players.splice(idx, 1);
+            eliminatedPlayers.push({ name: pName });
+            eliminationCounts[pName] = (eliminationCounts[pName] || 0) + 1;
+            playerHitCounts[pName] = 0; // يعيد التصفير لو أُنعِش لاحقاً واستُهدِف مجدداً
+            triggerEffect('تم إقصاء اللاعب نهائياً ❌<br>[ ' + pName + ' ]', 'sad-effect');
+            updatePlayerCount();
+            drawWheel();
+        }, TEMP_ELIMINATION_GRACE_MS);
+        return;
+    }
+
+    var targetIdx = players.findIndex(function (p) { return p.name === pName; });
+    if (targetIdx === -1) return;
+    players.splice(targetIdx, 1);
+    eliminatedPlayers.push({ name: pName });
+    eliminationCounts[pName] = (eliminationCounts[pName] || 0) + 1;
+    playerHitCounts[pName] = 0;
+    triggerEffect(`تم إقصاء اللاعب ❌<br>[ ${pName} ]`, 'sad-effect');
+    spawnFloatingEmojis('sad');
 }
 
 // -------- نافذة الإرجاع --------
@@ -956,10 +1112,13 @@ function openReentryModal() {
         return;
     }
 
-    // نحدد اللاعبين المقصيين الذين لم يستخدموا فرصة إرجاعهم الوحيدة بعد
+    // ⚠️ تعديل: كان الشرط "لم يُستخدَم إطلاقاً" (مرة واحدة بالضبط)، أصبح
+    // الآن يقارن بعدد المرات المسموحة فعلياً من الإعدادات (افتراضياً 1،
+    // نفس السلوك القديم تماماً إن لم تُغيَّر الإعدادات).
+    const maxFriendRevivals = getRouletteSettings().revivalFriendReturnCount || 1;
     const eligibleIndices = eliminatedPlayers
         .map((p, idx) => idx)
-        .filter(idx => !reentryUsed[eliminatedPlayers[idx].name]);
+        .filter(idx => (reentryUsed[eliminatedPlayers[idx].name] || 0) < maxFriendRevivals);
 
     modalSubtitle.textContent = "اختر قبيلة لمحاولة إرجاع لاعب مقصي بشكل عشوائي (الأسماء الحقيقية مخفية)";
     tribesContainer.innerHTML = "";
@@ -1004,10 +1163,16 @@ function openReentryModal() {
     modalActions.appendChild(skipBtn);
 
     modal.style.display = 'flex';
+    startSelectionTimer(function () {
+        modal.style.display = 'none';
+        triggerEffect('انتهى الوقت! ⏰<br>لم يُتَّخذ أي قرار، محاولة فاشلة', 'joy-effect');
+        afterDecision();
+    });
 }
 
 // نتيجة اختيار فتحة "لا يوجد خلفها أحد" أو فتحة لاعب استهلك فرصة إرجاعه مسبقاً
 function handleReentryEmptyChoice() {
+    clearSelectionTimer();
     modal.style.display = 'none';
     modalActions.innerHTML = "";
     lastLandedName = null;
@@ -1016,6 +1181,7 @@ function handleReentryEmptyChoice() {
 }
 
 function handleReentryChoice(originalIdx) {
+    clearSelectionTimer();
     modal.style.display = 'none';
     modalActions.innerHTML = "";
 
@@ -1028,7 +1194,7 @@ function handleReentryChoice(originalIdx) {
     const outcome = Math.floor(Math.random() * 3); // 0..2
     if (outcome === 0) {
         const [returned] = eliminatedPlayers.splice(originalIdx, 1);
-        reentryUsed[returned.name] = true; // استهلاك فرصة الإرجاع الوحيدة لهذا اللاعب نهائياً
+        reentryUsed[returned.name] = (reentryUsed[returned.name] || 0) + 1; // زيادة عدّاد مرات الإرجاع لهذا اللاعب
         players.push({ uid: ++uidCounter, name: returned.name });
         triggerEffect(`إرجاع ناجح! 🥳<br>عاد اللاعب [ ${returned.name} ] إلى اللعبة`, 'joy-effect');
         spawnFloatingEmojis('happy');
@@ -1040,6 +1206,7 @@ function handleReentryChoice(originalIdx) {
 }
 
 function handleSkipReentry() {
+    clearSelectionTimer();
     modal.style.display = 'none';
     modalActions.innerHTML = "";
 
@@ -1131,6 +1298,8 @@ function resetGame() {
     eliminatedPlayers = [];
     eliminationCounts = {};
     reentryUsed = {};
+    reentryUsedViaGift = {};
+    playerHitCounts = {};
     fullRoster = [];
     lastLandedName = null;
     currentAngle = 0;
@@ -1191,6 +1360,7 @@ function startNextRound() {
     players = fullRoster.map(name => ({ uid: ++uidCounter, name }));
     eliminatedPlayers = [];
     eliminationCounts = {};
+    playerHitCounts = {};
     fullRoster.forEach(n => { eliminationCounts[n] = 0; });
     reentryUsed = {};
     lastLandedName = null;
