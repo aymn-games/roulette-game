@@ -63,6 +63,7 @@
         gameTitle: 'روليت القبائل',
         connectButtonLabel: 'الاتصال بالبث و الانتقال للوبي',
         minPlayersToStart: 2,
+        logoImage: 'logo.png',
         headerGearIcon: 'icons/gear.svg',
         usernameIcon: 'icons/profile.png',
         keywordIcon: 'icons/keyword.png',
