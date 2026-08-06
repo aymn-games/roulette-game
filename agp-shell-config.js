@@ -52,7 +52,7 @@
      */
     AGP.events.on('stream:commentReceived', function (payload) {
         if (typeof window.AGP_handleChatComment === 'function' && payload && payload.text) {
-            window.AGP_handleChatComment(payload.text);
+            window.AGP_handleChatComment(payload.text, payload.name);
         }
     });
 
