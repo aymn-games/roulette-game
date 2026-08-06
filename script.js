@@ -83,8 +83,24 @@ function normalizeArabicText(text) {
         .replace(/\s+/g, ' ').toLowerCase();
 }
 
-function handleChatCommentForSelection(text) {
+/**
+ * ⚠️ إضافة: يجب أن يكون المعلِّق هو نفسه "الشخص الذي طلع اسمه بالروليت"
+ * (صاحب الدور الحالي) — أي معلّق آخر يُتجاهَل تماماً حتى لو طابق نص
+ * الاختيار بالصدفة. يُقارَن بالاسم (المعرِّف الوحيد المتاح داخل محرّك
+ * اللعبة نفسه، عبر players[landedIndex].name)، بمقارنة متسامحة
+ * (تجاهل حالة الأحرف والتطبيع العربي).
+ */
+function isCurrentChooser(commenterName) {
+    if (landedIndex === null || !players[landedIndex]) return false;
+    var chooserName = players[landedIndex].name;
+    var a = normalizeArabicText(commenterName || '');
+    var b = normalizeArabicText(chooserName || '');
+    return a !== '' && a === b;
+}
+
+function handleChatCommentForSelection(text, commenterName) {
     if (!_activeChatSelectionMap) return; // ما فيه نافذة اختيار مفتوحة حالياً
+    if (!isCurrentChooser(commenterName)) return; // مو صاحب الدور الحالي — يُتجاهَل
     var raw = (text || '').toString().trim();
     var handler = _activeChatSelectionMap[raw] || _activeChatSelectionMap[normalizeArabicText(raw)];
     if (handler) {
