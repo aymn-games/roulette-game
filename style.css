@@ -216,7 +216,7 @@ body {
    ============================================================ */
 .volume-control {
     position: fixed;
-    top: 20px;
+    top: 70px;
     left: 24px;
     display: flex;
     align-items: center;
@@ -270,7 +270,7 @@ body {
 
 @media (max-width: 900px) {
     .volume-control {
-        top: 10px;
+        top: 60px;
         left: 10px;
         padding: 6px 12px;
     }
@@ -472,7 +472,7 @@ body {
    ============================================================ */
 .wheel-scale-control {
     position: fixed;
-    top: 84px;
+    top: 134px;
     left: 24px;
     display: flex;
     align-items: center;
@@ -526,7 +526,7 @@ body {
 
 @media (max-width: 900px) {
     .wheel-scale-control {
-        top: 60px;
+        top: 110px;
         left: 10px;
         padding: 6px 12px;
     }
