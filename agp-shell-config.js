@@ -83,7 +83,7 @@
                 showWhen: { key: 'revivalSupportEnabled', equals: true }
             },
             {
-                key: 'revivalSupportCoinCount', label: 'عدد العملات', type: 'counter', min: 1, default: 100,
+                key: 'revivalSupportCoinCount', label: 'عدد العملات', type: 'counter', min: 1, default: 1,
                 showWhen: { key: 'revivalSupportEnabled', equals: true }
             },
             {
